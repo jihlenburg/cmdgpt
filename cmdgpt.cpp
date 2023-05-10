@@ -60,7 +60,7 @@ int get_gpt_chat_response(const std::string& prompt, std::string& response, cons
  * @brief Function to print help message.
  */
 void print_help() {
-    std::cout << "Usage: ./program [options] prompt\n"
+    std::cout << "Usage: cmdgpt [options] prompt\n"
               << "Options:\n"
               << "-h, --help        Show this help message\n"
               << "-k, --api_key     API key for OpenAI GPT API\n"
