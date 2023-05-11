@@ -1,49 +1,46 @@
-# Minimum version of CMake required to build this project
-cmake_minimum_required(VERSION 3.14)
+# CMake version requirement
+cmake_minimum_required(VERSION 3.11) # FetchContent is available in 3.11+
 
-# Name of the project
-project(CmdGpt)
-
-# Specify the C++ standard
+# Define the project and set the C++ standard
+project(cmdgpt)
 set(CMAKE_CXX_STANDARD 17)
+# set build type to Debug
+set(CMAKE_BUILD_TYPE Debug)
 
-# Specify the source files to be compiled
-set(SOURCE_FILES cmdgpt.cpp)
-
-# Include the FetchContent module, which allows fetching content from external sources at configure time
+# Include FetchContent module used for downloading dependencies
 include(FetchContent)
 
-# Declare the cpp-httplib library to be fetched from the given git repository
+# Declare httplib dependency: Define the name, the git repository, and the tag to download
 FetchContent_Declare(
-  cpp_httplib
+  httplib
   GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
   GIT_TAG master
 )
 
-# Declare the nlohmann-json library to be fetched from the given git repository
+# Declare json dependency: Define the name, the git repository, and the tag to download
 FetchContent_Declare(
-  nlohmann_json
+  json
   GIT_REPOSITORY https://github.com/nlohmann/json.git
   GIT_TAG master
 )
 
-# Make the declared content available to the build
-FetchContent_MakeAvailable(cpp_httplib nlohmann_json)
+# Fetch the declared content. This will download the dependencies if they are not already present.
+FetchContent_MakeAvailable(httplib json)
 
-# Check if the cpp-httplib library has been fetched, and if not, fetch it and add its directory to the include directories
-FetchContent_GetProperties(cpp_httplib)
-if(NOT cpp_httplib_POPULATED)
-  FetchContent_Populate(cpp_httplib)
-  include_directories(${cpp_httplib_SOURCE_DIR})
+# We need OpenSSL... 
+find_package(OpenSSL REQUIRED)
+if(OPENSSL_FOUND)
+    add_definitions(-DCPPHTTPLIB_OPENSSL_SUPPORT)
+    include_directories(${OPENSSL_INCLUDE_DIR})
 endif()
 
-# Check if the nlohmann-json library has been fetched, and if not, fetch it and add its directory to the include directories
-FetchContent_GetProperties(nlohmann_json)
-if(NOT nlohmann_json_POPULATED)
-  FetchContent_Populate(nlohmann_json)
-  include_directories(${nlohmann_json_SOURCE_DIR}/single_include)
-endif()
+# Add the cmdgpt executable and its source files
+add_executable(cmdgpt cmdgpt.cpp)
 
-# Add the executable target to be built from the specified source files
-add_executable(cmdgpt ${SOURCE_FILES})
+# Since httplib and json are header-only libraries, we only need to add their directories to the include directories
+target_include_directories(cmdgpt PRIVATE ${httplib_SOURCE_DIR} ${json_SOURCE_DIR}/include)
+
+# Link the json library and OpenSSL to the cmdgpt target
+# The nlohmann_json::nlohmann_json target brings in include paths and dependencies automatically
+target_link_libraries(cmdgpt PRIVATE nlohmann_json::nlohmann_json ${OPENSSL_LIBRARIES})
 

@@ -1,9 +1,9 @@
-#include <iostream>     // for std::cout, std::cerr
-#include <string>       // for std::string
-#include <stdexcept>    // for std::invalid_argument
-#include <cstdlib>      // for std::getenv
-#include "httplib.h"    // for httplib::Client
-#include "json.hpp"     // for json
+#include <iostream>             // for std::cout, std::cerr
+#include <string>               // for std::string
+#include <stdexcept>            // for std::invalid_argument
+#include <cstdlib>              // for std::getenv
+#include "httplib.h"            // for httplib::Client
+#include "nlohmann/json.hpp"    // for json
 
 using json = nlohmann::json;
 
@@ -41,12 +41,31 @@ int get_gpt_chat_response(const std::string& prompt, std::string& response, cons
     std::string url = "/v1/chat/completions";
 
     // Send the post request to the API
-    httplib::Client cli("api.openai.com");
+    httplib::Client cli("https://api.openai.com");
+
+    std::cerr << "Debug: Sending POST request to " << url << " with data: " << data.dump() << std::endl;
     auto res = cli.Post(url.c_str(), headers, data.dump(), "application/json");
-    
-    // If response is received, process it
     if (res) {
+        std::cerr << "Debug: Received HTTP response with status " << res->status << " and body: " << res->body << std::endl;
+    } else {
+        std::cerr << "Debug: No response received from the server." << std::endl;
+    }   
+
+    // If response is received, process it
+    if (res && !res->body.empty()) {
         json res_json = json::parse(res->body);
+        if (res_json["choices"].empty()) {
+            std::cerr << "Error: 'choices' array is empty." << std::endl;
+            return -1;  // or some other error code
+        }
+        if (!res_json["choices"][0].contains("finish_reason")) {
+            std::cerr << "Error: 'finish_reason' field is missing." << std::endl;
+            return -1;  // or some other error code
+        }
+        if (!res_json["choices"][0]["message"].contains("content")) {
+            std::cerr << "Error: 'content' field is missing." << std::endl;
+            return -1;  // or some other error code
+        }
         std::string finish_reason = res_json["choices"][0]["finish_reason"].get<std::string>();
         std::cerr << "Finish reason: " << finish_reason << std::endl;
         response = res_json["choices"][0]["message"]["content"].get<std::string>();
