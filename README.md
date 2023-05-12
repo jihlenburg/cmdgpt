@@ -39,16 +39,18 @@ The resulting `cmdgpt` executable will be in the `build` directory.
 
 ## Usage
 
-cmdgpt [options] prompt
+    ```sh
+    cmdgpt [options] prompt
 
-Options:
+    Options:
 
--h, --help: Show this help message
--k, --api_key: API key for OpenAI GPT API
--s, --sys_prompt: System prompt for OpenAI GPT API
--l, --log_file: Logfile to log messages
--m, --gpt_model: GPT model to use (default: gpt-4)
--L, --log_level: Log level (TRACE, DEBUG, INFO, WARN, ERROR, CRITICAL). Default is WARN.
+    -h, --help: Show this help message
+    -k, --api_key: API key for OpenAI GPT API
+    -s, --sys_prompt: System prompt for OpenAI GPT API
+    -l, --log_file: Logfile to log messages
+    -m, --gpt_model: GPT model to use (default: gpt-4)
+    -L, --log_level: Log level (TRACE, DEBUG, INFO, WARN, ERROR, CRITICAL). Default is WARN.
+    ```
 
 ## Environment Variables
 
