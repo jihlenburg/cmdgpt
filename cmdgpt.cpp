@@ -1,3 +1,27 @@
+/*
+MIT License
+
+Copyright (c) 2023 Joern Ihlenburg
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
 #include <iostream>
 #include <string>
 #include <stdexcept>
@@ -10,6 +34,9 @@
 #include "spdlog/sinks/file_sinks.h"
 
 using json = nlohmann::json;
+
+// The current version
+#define CMDGPT_VERSION "v0.1"  // Added this line
 
 // Preprocessor defines for constants
 #define DEFAULT_MODEL "gpt-4"
@@ -189,19 +216,22 @@ int main(int argc, char* argv[]) {
     std::string response;
     int status_code;
 
-    // Parse command-line arguments and environment variables
+    // Parse environment variables
     api_key = getenv("OPENAI_API_KEY") ? getenv("OPENAI_API_KEY") : "";
     system_prompt = getenv("OPENAI_SYSTEM_PROMPT") ? getenv("OPENAI_SYSTEM_PROMPT") : DEFAULT_SYSTEM_PROMPT;
     gpt_model = getenv("OPENAI_GPT_MODEL") ? getenv("OPENAI_GPT_MODEL") : DEFAULT_MODEL;
     log_file = getenv("CMDGPT_LOG_FILE") ? getenv("CMDGPT_LOG_FILE") : "logfile.txt"; // Default log file
     std::string env_log_level = getenv("CMDGPT_LOG_LEVEL") ? getenv("CMDGPT_LOG_LEVEL") : "WARN"; // Default log level
     log_level = log_levels.count(env_log_level) ? log_levels.at(env_log_level) : DEFAULT_LOG_LEVEL;
-    // Check for command-line options
+
     // Parsing command-line arguments
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "-h" || arg == "--help") {
             print_help();
+            return EXIT_SUCCESS;
+        } else if (arg == "-v" || arg == "--version") {  // Added this block
+            std::cout << "cmdgpt version: " << CMDGPT_VERSION << std::endl;
             return EXIT_SUCCESS;
         } else if (arg == "-k" || arg == "--api_key") {
             api_key = argv[++i];
