@@ -80,7 +80,7 @@ std::shared_ptr<spdlog::logger> gLogger;
  * @brief Prints the help message to the console.
  */
 void print_help() {
-    std::cout << "Usage: ./program [options] [prompt]\n"
+    std::cout << "Usage: cmdgpt [options] [prompt]\n"
               << "Options:\n"
               << "  -h, --help              Show this help message and exit\n"
               << "  -k, --api_key KEY       Set the OpenAI API key to KEY\n"
@@ -89,6 +89,7 @@ void print_help() {
               << "  -m, --gpt_model MODEL   Set the GPT model to MODEL\n"
               << "  -L, --log_level LEVEL   Set the log level to LEVEL\n"
               << "                          (TRACE, DEBUG, INFO, WARN, ERROR, CRITICAL)\n"
+              << "  -v, --version           Print the version of the program and exit\n"
               << "prompt:\n"
               << "  The text prompt to send to the OpenAI GPT API. If not provided, the program will read from stdin.\n";
 }
