@@ -91,7 +91,13 @@ void print_help() {
               << "                          (TRACE, DEBUG, INFO, WARN, ERROR, CRITICAL)\n"
               << "  -v, --version           Print the version of the program and exit\n"
               << "prompt:\n"
-              << "  The text prompt to send to the OpenAI GPT API. If not provided, the program will read from stdin.\n";
+              << "  The text prompt to send to the OpenAI GPT API. If not provided, the program will read from stdin.\n"
+              << "\nEnvironment Variables:\n"
+              << "  OPENAI_API_KEY     API key for the OpenAI GPT API.\n"
+              << "  OPENAI_SYS_PROMPT  System prompt for the OpenAI GPT API.\n"
+              << "  CMDGPT_LOG_FILE    Logfile to record messages.\n"
+              << "  OPENAI_GPT_MODEL   GPT model to use.\n"
+              << "  CMDGPT_LOG_LEVEL   Log level.\n";
 }
 
 /**
@@ -219,7 +225,7 @@ int main(int argc, char* argv[]) {
 
     // Parse environment variables
     api_key = getenv("OPENAI_API_KEY") ? getenv("OPENAI_API_KEY") : "";
-    system_prompt = getenv("OPENAI_SYSTEM_PROMPT") ? getenv("OPENAI_SYSTEM_PROMPT") : DEFAULT_SYSTEM_PROMPT;
+    system_prompt = getenv("OPENAI_SYS_PROMPT") ? getenv("OPENAI_SYS_PROMPT") : DEFAULT_SYSTEM_PROMPT;
     gpt_model = getenv("OPENAI_GPT_MODEL") ? getenv("OPENAI_GPT_MODEL") : DEFAULT_MODEL;
     log_file = getenv("CMDGPT_LOG_FILE") ? getenv("CMDGPT_LOG_FILE") : "logfile.txt"; // Default log file
     std::string env_log_level = getenv("CMDGPT_LOG_LEVEL") ? getenv("CMDGPT_LOG_LEVEL") : "WARN"; // Default log level
