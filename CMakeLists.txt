@@ -39,6 +39,14 @@ set(SPDLOG_BUILD_TESTING OFF)
 # Fetch the declared content. This will download the dependencies if they are not already present.
 FetchContent_MakeAvailable(httplib json spdlog)
 
+# Catch2 for unit tests
+FetchContent_Declare(
+  Catch2
+  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+  GIT_TAG v3.4.0
+)
+FetchContent_MakeAvailable(Catch2)
+
 # We need OpenSSL... 
 find_package(OpenSSL REQUIRED)
 if(OPENSSL_FOUND)
@@ -55,4 +63,11 @@ target_include_directories(cmdgpt PRIVATE ${httplib_SOURCE_DIR} ${json_SOURCE_DI
 # Link the json library and OpenSSL to the cmdgpt target
 # The nlohmann_json::nlohmann_json target brings in include paths and dependencies automatically
 target_link_libraries(cmdgpt PRIVATE nlohmann_json::nlohmann_json spdlog ${OPENSSL_LIBRARIES})
+
+enable_testing()
+
+add_executable(cmdgpt_tests tests/cmdgpt_tests.cpp)
+target_include_directories(cmdgpt_tests PRIVATE ${httplib_SOURCE_DIR} ${json_SOURCE_DIR}/include ${spdlog_SOURCE_DIR}/include)
+target_link_libraries(cmdgpt_tests PRIVATE Catch2::Catch2WithMain nlohmann_json::nlohmann_json spdlog)
+add_test(NAME cmdgpt_tests COMMAND cmdgpt_tests)
 

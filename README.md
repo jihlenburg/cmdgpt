@@ -75,3 +75,14 @@ The tool utilizes the following exit status codes:
 ## Note
 
 Please note that the `-L` option and the `CMDGPT_LOG_LEVEL` environment variable expect a log level in uppercase. If an invalid log level is provided, the default log level (WARN) will be used.
+
+## Running Tests
+
+This project uses Catch2 and CTest for unit tests. To run the test suite locally:
+
+```sh
+mkdir -p build
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build --output-on-failure
+```

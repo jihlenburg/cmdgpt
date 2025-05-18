@@ -27,6 +27,7 @@ SOFTWARE.
 #include <stdexcept>
 #include <cstdlib>
 #include <fstream>
+#include <functional>
 #include "httplib.h"
 #include "nlohmann/json.hpp"
 #include "spdlog/spdlog.h"
@@ -76,6 +77,11 @@ const std::map<std::string, spdlog::level::level_enum> log_levels = {
 // Global logger variable accessible by all functions
 std::shared_ptr<spdlog::logger> gLogger;
 
+// Type alias for a function that performs HTTP POST requests. This allows the
+// HTTP call to be replaced by a stub in tests.
+using PostFunc = std::function<std::shared_ptr<httplib::Response>(
+    const std::string&, const httplib::Headers&, const std::string&, const char*)>;
+
 /**
  * @brief Prints the help message to the console.
  */
@@ -107,10 +113,16 @@ void print_help() {
  * @param api_key The API key for the OpenAI GPT API. Default is an empty string.
  * @param system_prompt The system prompt for the OpenAI GPT API. Default is an empty string.
  * @param model The GPT model to use. Default is DEFAULT_MODEL.
+ * @param post_func Optional callback performing the HTTP POST request. Used for
+ *                  testing to inject a mock client.
  * @return The HTTP response status code, or EMPTY_RESPONSE_CODE if no response was received.
  * @throws std::invalid_argument If no API key was provided.
  */
-int get_gpt_chat_response(const std::string& prompt, std::string& response, const std::string& api_key = "", const std::string& system_prompt = "", const std::string& model = DEFAULT_MODEL) {
+int get_gpt_chat_response(const std::string& prompt, std::string& response,
+                         const std::string& api_key = "",
+                         const std::string& system_prompt = "",
+                         const std::string& model = DEFAULT_MODEL,
+                         PostFunc post_func = nullptr) {
     // Declare the required variables at the beginning of the function
     json res_json;
     std::string finish_reason;
@@ -135,14 +147,20 @@ int get_gpt_chat_response(const std::string& prompt, std::string& response, cons
         }}
     };
 
-    // Initialize the HTTP client
+    // Initialize the HTTP client if no custom POST function was supplied
     httplib::Client cli(SERVER_URL);
+    if (!post_func) {
+        post_func = [&cli](const std::string& path, const httplib::Headers& h,
+                           const std::string& body, const char* type) {
+            return cli.Post(path.c_str(), h, body, type);
+        };
+    }
 
     // Log the data being sent
     gLogger->debug("Debug: Sending POST request to {} with data: {}", URL, data.dump());
 
     // Send the POST request
-    auto res = cli.Post(URL, headers, data.dump(), APPLICATION_JSON);
+    auto res = post_func(URL, headers, data.dump(), APPLICATION_JSON);
 
     // If response is received from the server
     if (res) {
