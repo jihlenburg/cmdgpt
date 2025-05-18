@@ -40,7 +40,7 @@ using json = nlohmann::json;
 
 // Preprocessor defines for constants
 #define DEFAULT_MODEL "gpt-4"
-#define DEFAULT_SYSTEM_PROMPT "You are a helpfull assitant!"
+#define DEFAULT_SYSTEM_PROMPT "You are a helpful assistant!"
 #define DEFAULT_LOG_LEVEL spdlog::level::warn
 #define AUTHORIZATION_HEADER "Authorization"
 #define CONTENT_TYPE_HEADER "Content-Type"
