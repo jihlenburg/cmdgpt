@@ -218,7 +218,6 @@ int main(int argc, char* argv[]) {
     std::string gpt_model;
     std::string log_file;
     spdlog::level::level_enum log_level;
-    std::string arg;
     std::string prompt;
     std::string response;
     int status_code;
