@@ -1,3 +1,14 @@
+/**
+ * @file main.cpp
+ * @brief Main entry point for cmdgpt command-line tool
+ * @author Joern Ihlenburg
+ * @date 2023-2024
+ *
+ * This file contains the main function and command-line argument parsing
+ * for the cmdgpt tool. It handles initialization, configuration loading,
+ * and routing to appropriate modes (interactive or single-shot).
+ */
+
 /*
 MIT License
 
@@ -38,30 +49,39 @@ SOFTWARE.
  */
 int main(int argc, const char* const argv[])
 {
-    std::string api_key;
-    std::string system_prompt;
-    std::string gpt_model;
-    std::string log_file;
-    spdlog::level::level_enum log_level;
+    // Initialize configuration
+    cmdgpt::Config config;
+
+    // Load from environment first
+    config.load_from_environment();
+
+    // Try to load from config file
+    cmdgpt::ConfigFile config_file;
+    if (cmdgpt::ConfigFile::exists())
+    {
+        try
+        {
+            if (config_file.load(cmdgpt::ConfigFile::get_default_path()))
+            {
+                config_file.apply_to(config);
+            }
+        }
+        catch (const std::exception& e)
+        {
+            std::cerr << "Warning: Failed to load config file: " << e.what() << std::endl;
+        }
+    }
+
     std::string prompt;
-
-    // Parse environment variables
-    api_key = getenv("OPENAI_API_KEY") ? getenv("OPENAI_API_KEY") : "";
-    system_prompt =
-        getenv("OPENAI_SYS_PROMPT") ? getenv("OPENAI_SYS_PROMPT") : cmdgpt::DEFAULT_SYSTEM_PROMPT;
-    gpt_model = getenv("OPENAI_GPT_MODEL") ? getenv("OPENAI_GPT_MODEL") : cmdgpt::DEFAULT_MODEL;
-    log_file = getenv("CMDGPT_LOG_FILE") ? getenv("CMDGPT_LOG_FILE") : "logfile.txt";
-
-    std::string env_log_level = getenv("CMDGPT_LOG_LEVEL") ? getenv("CMDGPT_LOG_LEVEL") : "WARN";
+    bool interactive_mode = false;
+    bool streaming_mode = false;
+    cmdgpt::OutputFormat output_format = cmdgpt::OutputFormat::PLAIN;
 
     static const std::map<std::string, spdlog::level::level_enum> log_levels = {
         {"TRACE", spdlog::level::trace}, {"DEBUG", spdlog::level::debug},
         {"INFO", spdlog::level::info},   {"WARN", spdlog::level::warn},
         {"ERROR", spdlog::level::err},   {"CRITICAL", spdlog::level::critical},
     };
-
-    log_level =
-        log_levels.count(env_log_level) ? log_levels.at(env_log_level) : cmdgpt::DEFAULT_LOG_LEVEL;
 
     // Parsing command-line arguments
     for (int i = 1; i < argc; ++i)
@@ -78,6 +98,23 @@ int main(int argc, const char* const argv[])
             std::cout << "cmdgpt version: " << cmdgpt::VERSION << std::endl;
             return EXIT_SUCCESS;
         }
+        else if (arg == "-i" || arg == "--interactive")
+        {
+            interactive_mode = true;
+        }
+        else if (arg == "--stream")
+        {
+            streaming_mode = true;
+        }
+        else if (arg == "-f" || arg == "--format")
+        {
+            if (++i >= argc)
+            {
+                std::cerr << "Error: Format argument requires a value" << std::endl;
+                return EX_USAGE;
+            }
+            output_format = cmdgpt::parse_output_format(argv[i]);
+        }
         else if (arg == "-k" || arg == "--api_key")
         {
             if (++i >= argc)
@@ -85,11 +122,13 @@ int main(int argc, const char* const argv[])
                 std::cerr << "Error: API key argument requires a value" << std::endl;
                 return EX_USAGE;
             }
-            api_key = argv[i];
-            // Basic validation to prevent extremely long inputs
-            if (api_key.length() > 1024)
+            try
             {
-                std::cerr << "Error: API key too long" << std::endl;
+                config.set_api_key(argv[i]);
+            }
+            catch (const cmdgpt::ValidationException& e)
+            {
+                std::cerr << "Error: " << e.what() << std::endl;
                 return EX_USAGE;
             }
         }
@@ -100,11 +139,13 @@ int main(int argc, const char* const argv[])
                 std::cerr << "Error: System prompt argument requires a value" << std::endl;
                 return EX_USAGE;
             }
-            system_prompt = argv[i];
-            // Basic validation to prevent extremely long inputs
-            if (system_prompt.length() > 100000)
+            try
             {
-                std::cerr << "Error: System prompt too long" << std::endl;
+                config.set_system_prompt(argv[i]);
+            }
+            catch (const cmdgpt::ValidationException& e)
+            {
+                std::cerr << "Error: " << e.what() << std::endl;
                 return EX_USAGE;
             }
         }
@@ -115,11 +156,13 @@ int main(int argc, const char* const argv[])
                 std::cerr << "Error: Log file argument requires a value" << std::endl;
                 return EX_USAGE;
             }
-            log_file = argv[i];
-            // Validate log file path
-            if (log_file.empty() || log_file.length() > 4096)
+            try
             {
-                std::cerr << "Error: Invalid log file path" << std::endl;
+                config.set_log_file(argv[i]);
+            }
+            catch (const cmdgpt::ValidationException& e)
+            {
+                std::cerr << "Error: " << e.what() << std::endl;
                 return EX_USAGE;
             }
         }
@@ -130,11 +173,13 @@ int main(int argc, const char* const argv[])
                 std::cerr << "Error: Model argument requires a value" << std::endl;
                 return EX_USAGE;
             }
-            gpt_model = argv[i];
-            // Validate model name
-            if (gpt_model.empty() || gpt_model.length() > 100)
+            try
             {
-                std::cerr << "Error: Invalid model name" << std::endl;
+                config.set_model(argv[i]);
+            }
+            catch (const cmdgpt::ValidationException& e)
+            {
+                std::cerr << "Error: " << e.what() << std::endl;
                 return EX_USAGE;
             }
         }
@@ -148,7 +193,7 @@ int main(int argc, const char* const argv[])
             std::string log_level_str = argv[i];
             if (log_levels.count(log_level_str))
             {
-                log_level = log_levels.at(log_level_str);
+                config.set_log_level(log_levels.at(log_level_str));
             }
             else
             {
@@ -178,10 +223,11 @@ int main(int argc, const char* const argv[])
     try
     {
         auto console_sink = std::make_shared<spdlog::sinks::ansicolor_stdout_sink_mt>();
-        auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(log_file, true);
+        auto file_sink =
+            std::make_shared<spdlog::sinks::basic_file_sink_mt>(config.log_file(), true);
         gLogger = std::make_shared<spdlog::logger>(
             "multi_sink", spdlog::sinks_init_list{console_sink, file_sink});
-        gLogger->set_level(log_level);
+        gLogger->set_level(config.log_level());
     }
     catch (const spdlog::spdlog_ex& ex)
     {
@@ -189,11 +235,37 @@ int main(int argc, const char* const argv[])
         return EX_CONFIG;
     }
 
-    // Check for API key
-    if (api_key.empty())
+    // Run interactive mode if requested
+    if (interactive_mode)
+    {
+        // Check for API key
+        if (config.api_key().empty())
+        {
+            std::cerr
+                << "Error: No API key provided. "
+                << "Set OPENAI_API_KEY environment variable, use -k option, or add to ~/.cmdgptrc"
+                << std::endl;
+            return EX_CONFIG;
+        }
+
+        try
+        {
+            cmdgpt::run_interactive_mode(config);
+            return EXIT_SUCCESS;
+        }
+        catch (const std::exception& e)
+        {
+            gLogger->critical("Interactive mode error: {}", e.what());
+            return EXIT_FAILURE;
+        }
+    }
+
+    // Check for API key for non-interactive mode
+    if (config.api_key().empty())
     {
         std::cerr << "Error: No API key provided. "
-                  << "Set OPENAI_API_KEY environment variable or use -k option." << std::endl;
+                  << "Set OPENAI_API_KEY environment variable, use -k option, or add to ~/.cmdgptrc"
+                  << std::endl;
         return EX_CONFIG;
     }
 
@@ -210,9 +282,12 @@ int main(int argc, const char* const argv[])
     // Make the API request and handle the response
     try
     {
-        std::string response =
-            cmdgpt::get_gpt_chat_response(prompt, api_key, system_prompt, gpt_model);
-        std::cout << response << std::endl;
+        std::string response = cmdgpt::get_gpt_chat_response(prompt, config);
+
+        // Format output based on requested format
+        std::string formatted_output = cmdgpt::format_output(response, output_format);
+        std::cout << formatted_output << std::endl;
+
         return EXIT_SUCCESS;
     }
     catch (const cmdgpt::ConfigurationException& e)

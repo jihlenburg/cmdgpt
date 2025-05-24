@@ -1,3 +1,22 @@
+/**
+ * @file cmdgpt.h
+ * @brief Command-line interface for OpenAI GPT API
+ * @author Joern Ihlenburg
+ * @date 2023-2024
+ * @version 0.3
+ *
+ * This file contains the main API declarations for cmdgpt, a command-line
+ * tool for interacting with OpenAI's GPT models. It provides features including:
+ * - Interactive REPL mode for conversational AI
+ * - Multiple output formats (plain, JSON, Markdown, code)
+ * - Configuration file support
+ * - Comprehensive error handling
+ * - Security features including input validation
+ *
+ * @copyright Copyright (c) 2023 Joern Ihlenburg
+ * @license MIT License
+ */
+
 /*
 MIT License
 
@@ -26,61 +45,123 @@ SOFTWARE.
 #define CMDGPT_H
 
 #include "spdlog/spdlog.h"
+#include <deque>
+#include <filesystem>
+#include <fstream>
+#include <functional>
 #include <map>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <vector>
 
-// Forward declarations
+/**
+ * @namespace cmdgpt
+ * @brief Main namespace for cmdgpt functionality
+ *
+ * Contains all classes, functions, and constants for the cmdgpt
+ * command-line tool. Organized into several logical components:
+ * - Configuration management (Config, ConfigFile)
+ * - Conversation handling (Message, Conversation)
+ * - API interaction (get_gpt_chat_response functions)
+ * - Output formatting (OutputFormat, format_output)
+ * - Error handling (exception hierarchy)
+ */
 namespace cmdgpt
 {
 
-// Version information
-inline constexpr std::string_view VERSION = "v0.2";
+/// @brief Current version of cmdgpt
+inline constexpr std::string_view VERSION = "v0.3";
 
-// Model and prompt defaults
-inline constexpr std::string_view DEFAULT_MODEL = "gpt-4";
-inline constexpr std::string_view DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant!";
-inline constexpr spdlog::level::level_enum DEFAULT_LOG_LEVEL = spdlog::level::warn;
+/// @name Default Configuration Values
+/// @{
+inline constexpr std::string_view DEFAULT_MODEL = "gpt-4"; ///< Default GPT model
+inline constexpr std::string_view DEFAULT_SYSTEM_PROMPT =
+    "You are a helpful assistant!"; ///< Default system prompt
+inline constexpr spdlog::level::level_enum DEFAULT_LOG_LEVEL =
+    spdlog::level::warn; ///< Default log level
+/// @}
 
-// HTTP headers
-inline constexpr std::string_view AUTHORIZATION_HEADER = "Authorization";
-inline constexpr std::string_view CONTENT_TYPE_HEADER = "Content-Type";
-inline constexpr std::string_view APPLICATION_JSON = "application/json";
+/// @name HTTP Headers
+/// @{
+inline constexpr std::string_view AUTHORIZATION_HEADER =
+    "Authorization"; ///< HTTP Authorization header
+inline constexpr std::string_view CONTENT_TYPE_HEADER =
+    "Content-Type"; ///< HTTP Content-Type header
+inline constexpr std::string_view APPLICATION_JSON = "application/json"; ///< JSON content type
+/// @}
 
-// JSON keys for OpenAI API
-inline constexpr std::string_view SYSTEM_ROLE = "system";
-inline constexpr std::string_view USER_ROLE = "user";
-inline constexpr std::string_view MODEL_KEY = "model";
-inline constexpr std::string_view MESSAGES_KEY = "messages";
-inline constexpr std::string_view ROLE_KEY = "role";
-inline constexpr std::string_view CONTENT_KEY = "content";
-inline constexpr std::string_view CHOICES_KEY = "choices";
-inline constexpr std::string_view FINISH_REASON_KEY = "finish_reason";
+/// @name OpenAI API JSON Keys
+/// @{
+inline constexpr std::string_view SYSTEM_ROLE = "system";    ///< System role identifier
+inline constexpr std::string_view USER_ROLE = "user";        ///< User role identifier
+inline constexpr std::string_view MODEL_KEY = "model";       ///< Model key in API request
+inline constexpr std::string_view MESSAGES_KEY = "messages"; ///< Messages array key
+inline constexpr std::string_view ROLE_KEY = "role";         ///< Role key in message
+inline constexpr std::string_view CONTENT_KEY = "content";   ///< Content key in message
+inline constexpr std::string_view CHOICES_KEY = "choices";   ///< Choices array in response
+inline constexpr std::string_view FINISH_REASON_KEY =
+    "finish_reason"; ///< Finish reason in response
+/// @}
 
-// API configuration
-inline constexpr std::string_view API_URL = "/v1/chat/completions";
-inline constexpr std::string_view SERVER_URL = "https://api.openai.com";
+/// @name API Configuration
+/// @{
+inline constexpr std::string_view API_URL =
+    "/v1/chat/completions"; ///< OpenAI chat completions endpoint
+inline constexpr std::string_view SERVER_URL = "https://api.openai.com"; ///< OpenAI API server URL
+/// @}
 
-// Security and validation limits
-inline constexpr size_t MAX_PROMPT_LENGTH = 1024 * 1024;        // 1MB max prompt
-inline constexpr size_t MAX_RESPONSE_LENGTH = 10 * 1024 * 1024; // 10MB max response
-inline constexpr size_t MAX_API_KEY_LENGTH = 256;               // Max API key length
-inline constexpr int CONNECTION_TIMEOUT_SECONDS = 30;
-inline constexpr int READ_TIMEOUT_SECONDS = 60;
+/// @name Security and Validation Limits
+/// @{
+inline constexpr size_t MAX_PROMPT_LENGTH = 1024 * 1024;        ///< Maximum prompt length (1MB)
+inline constexpr size_t MAX_RESPONSE_LENGTH = 10 * 1024 * 1024; ///< Maximum response length (10MB)
+inline constexpr size_t MAX_API_KEY_LENGTH = 256;               ///< Maximum API key length
+inline constexpr int CONNECTION_TIMEOUT_SECONDS = 30;           ///< Connection timeout in seconds
+inline constexpr int READ_TIMEOUT_SECONDS = 60;                 ///< Read timeout in seconds
+/// @}
 
-// HTTP status codes
+/**
+ * @brief HTTP status codes used by the API
+ */
 enum class HttpStatus : int
 {
-    EMPTY_RESPONSE = -1,
-    OK = 200,
-    BAD_REQUEST = 400,
-    UNAUTHORIZED = 401,
-    FORBIDDEN = 403,
-    NOT_FOUND = 404,
-    INTERNAL_SERVER_ERROR = 500
+    EMPTY_RESPONSE = -1,        ///< No response received or empty response body
+    OK = 200,                   ///< Request successful
+    BAD_REQUEST = 400,          ///< Bad request format or parameters
+    UNAUTHORIZED = 401,         ///< Invalid or missing API key
+    FORBIDDEN = 403,            ///< Access forbidden
+    NOT_FOUND = 404,            ///< Endpoint not found
+    INTERNAL_SERVER_ERROR = 500 ///< Server error
 };
+
+/**
+ * @brief Output format options for response formatting
+ *
+ * Determines how the API response will be formatted before display
+ */
+enum class OutputFormat
+{
+    PLAIN,    ///< Plain text output (default)
+    MARKDOWN, ///< Markdown formatted output with headers
+    JSON,     ///< JSON structured output with metadata
+    CODE      ///< Extract and display only code blocks
+};
+
+/**
+ * @brief Convert string to OutputFormat enum
+ *
+ * Case-insensitive parsing of format strings. Supports abbreviations.
+ *
+ * @param format String representation of format ("plain", "json", "markdown"/"md", "code")
+ * @return Corresponding OutputFormat enum value, defaults to PLAIN if unknown
+ *
+ * @code
+ * auto fmt = parse_output_format("json");  // Returns OutputFormat::JSON
+ * auto fmt2 = parse_output_format("md");   // Returns OutputFormat::MARKDOWN
+ * @endcode
+ */
+OutputFormat parse_output_format(std::string_view format);
 
 // Custom exception classes for better error handling
 class CmdGptException : public std::runtime_error
@@ -152,39 +233,101 @@ class Config
     Config(Config&&) = default;
     Config& operator=(Config&&) = default;
 
-    // Configuration setters with validation
+    /**
+     * @brief Set API key with validation
+     * @param key OpenAI API key
+     * @throws ValidationException if key is invalid
+     */
     void set_api_key(std::string_view key);
+
+    /**
+     * @brief Set system prompt with validation
+     * @param prompt System prompt for context
+     * @throws ValidationException if prompt exceeds size limits
+     */
     void set_system_prompt(std::string_view prompt);
+
+    /**
+     * @brief Set model name with validation
+     * @param model GPT model name (e.g., "gpt-4", "gpt-3.5-turbo")
+     * @throws ValidationException if model name is invalid
+     */
     void set_model(std::string_view model);
+
+    /**
+     * @brief Set log file path with validation
+     * @param file Path to log file
+     * @throws ValidationException if path is invalid
+     */
     void set_log_file(std::string_view file);
+
+    /**
+     * @brief Set logging level
+     * @param level spdlog log level
+     */
     void set_log_level(spdlog::level::level_enum level);
 
-    // Configuration getters
+    /**
+     * @brief Get configured API key
+     * @return API key string
+     */
     const std::string& api_key() const noexcept
     {
         return api_key_;
     }
+
+    /**
+     * @brief Get configured system prompt
+     * @return System prompt string
+     */
     const std::string& system_prompt() const noexcept
     {
         return system_prompt_;
     }
+
+    /**
+     * @brief Get configured model name
+     * @return Model name string
+     */
     const std::string& model() const noexcept
     {
         return model_;
     }
+
+    /**
+     * @brief Get configured log file path
+     * @return Log file path string
+     */
     const std::string& log_file() const noexcept
     {
         return log_file_;
     }
+
+    /**
+     * @brief Get configured log level
+     * @return spdlog log level
+     */
     spdlog::level::level_enum log_level() const noexcept
     {
         return log_level_;
     }
 
-    // Load configuration from environment variables
+    /**
+     * @brief Load configuration from environment variables
+     *
+     * Reads from:
+     * - OPENAI_API_KEY
+     * - OPENAI_SYS_PROMPT
+     * - OPENAI_GPT_MODEL
+     * - CMDGPT_LOG_FILE
+     * - CMDGPT_LOG_LEVEL
+     */
     void load_from_environment();
 
-    // Validate all configuration values
+    /**
+     * @brief Validate all configuration values
+     * @throws ValidationException if any configuration is invalid
+     */
     void validate() const;
 
   private:
@@ -194,6 +337,193 @@ class Config
     std::string log_file_{"logfile.txt"};
     spdlog::level::level_enum log_level_{DEFAULT_LOG_LEVEL};
 };
+
+/**
+ * @brief Represents a single message in a conversation
+ *
+ * Messages are the fundamental unit of conversation with the AI model.
+ * Each message has a role (system, user, assistant) and content.
+ */
+struct Message
+{
+    std::string role;    ///< Role of the message sender ("system", "user", "assistant")
+    std::string content; ///< Text content of the message
+
+    /**
+     * @brief Construct a new Message
+     * @param r Role of the message sender
+     * @param c Content of the message
+     */
+    Message(std::string_view r, std::string_view c) : role(r), content(c)
+    {
+    }
+};
+
+/**
+ * @brief Manages conversation history and context
+ *
+ * The Conversation class maintains a history of messages exchanged with the AI model,
+ * automatically managing context length to stay within token limits. It provides
+ * persistence through JSON serialization and file I/O.
+ *
+ * @code
+ * Conversation conv;
+ * conv.add_message("system", "You are a helpful assistant");
+ * conv.add_message("user", "Hello!");
+ * conv.save_to_file("conversation.json");
+ * @endcode
+ */
+class Conversation
+{
+  public:
+    /// Default constructor creates empty conversation
+    Conversation() = default;
+
+    /**
+     * @brief Add a message to the conversation
+     *
+     * Automatically trims old messages if context length exceeds limits
+     *
+     * @param role Role of the message sender ("system", "user", "assistant")
+     * @param content Text content of the message
+     */
+    void add_message(std::string_view role, std::string_view content);
+
+    /**
+     * @brief Clear all messages from the conversation
+     */
+    void clear();
+
+    /**
+     * @brief Get all messages in the conversation
+     * @return Const reference to the vector of messages
+     */
+    const std::vector<Message>& get_messages() const
+    {
+        return messages_;
+    }
+
+    /**
+     * @brief Save conversation to a JSON file
+     *
+     * @param path Filesystem path to save the conversation
+     * @throws std::runtime_error if file cannot be opened for writing
+     */
+    void save_to_file(const std::filesystem::path& path) const;
+
+    /**
+     * @brief Load conversation from a JSON file
+     *
+     * @param path Filesystem path to load the conversation from
+     * @throws std::runtime_error if file cannot be opened or parsed
+     */
+    void load_from_file(const std::filesystem::path& path);
+
+    /**
+     * @brief Get conversation as formatted JSON string
+     * @return JSON representation of the conversation with proper formatting
+     */
+    std::string to_json() const;
+
+    /**
+     * @brief Estimate token count for the conversation
+     *
+     * Uses rough heuristic of 1 token ≈ 4 characters
+     *
+     * @return Estimated number of tokens in the conversation
+     */
+    size_t estimate_tokens() const;
+
+  private:
+    std::vector<Message> messages_;                      ///< Ordered list of conversation messages
+    static constexpr size_t MAX_CONTEXT_LENGTH = 100000; ///< Maximum context length (~25k tokens)
+};
+
+/**
+ * @brief Configuration file manager
+ *
+ * Handles loading and saving configuration from/to .cmdgptrc files.
+ * Supports simple key=value format with comment lines starting with #.
+ *
+ * @code
+ * ConfigFile config;
+ * if (config.load(ConfigFile::get_default_path())) {
+ *     config.apply_to(my_config);
+ * }
+ * @endcode
+ *
+ * Example .cmdgptrc file:
+ * @code
+ * # cmdgpt configuration
+ * api_key=sk-...
+ * model=gpt-4
+ * system_prompt=You are a helpful assistant
+ * log_level=INFO
+ * @endcode
+ */
+class ConfigFile
+{
+  public:
+    /// Default constructor
+    ConfigFile() = default;
+
+    /**
+     * @brief Load configuration from file
+     *
+     * Parses key=value pairs, ignoring comments and empty lines
+     *
+     * @param path Path to configuration file
+     * @return true if file was successfully loaded, false otherwise
+     */
+    bool load(const std::filesystem::path& path);
+
+    /**
+     * @brief Save configuration to file
+     *
+     * Writes all key=value pairs with header comment
+     *
+     * @param path Path to save configuration file
+     * @throws std::runtime_error if file cannot be opened for writing
+     */
+    void save(const std::filesystem::path& path) const;
+
+    /**
+     * @brief Apply loaded configuration to a Config object
+     *
+     * Only sets values that exist in the configuration file
+     *
+     * @param config Config object to update with loaded values
+     */
+    void apply_to(Config& config) const;
+
+    /**
+     * @brief Get the default configuration file path
+     *
+     * @return Path to ~/.cmdgptrc
+     * @throws std::runtime_error if HOME environment variable is not set
+     */
+    static std::filesystem::path get_default_path();
+
+    /**
+     * @brief Check if default config file exists
+     *
+     * @return true if ~/.cmdgptrc exists, false otherwise
+     */
+    static bool exists();
+
+  private:
+    std::map<std::string, std::string> values_; ///< Key-value pairs from config file
+};
+
+/**
+ * @brief Streaming response callback type
+ *
+ * Function signature for callbacks that receive streaming response chunks.
+ * Called repeatedly as data arrives from the API.
+ *
+ * @param chunk Partial response text received from the API
+ */
+using StreamCallback = std::function<void(const std::string& chunk)>;
 
 /**
  * @brief Validates and sanitizes API key input
@@ -249,6 +579,63 @@ std::string get_gpt_chat_response(std::string_view prompt, std::string_view api_
  * @throws ValidationException on invalid input data
  */
 std::string get_gpt_chat_response(std::string_view prompt, const Config& config);
+
+/**
+ * @brief Sends a chat completion request with conversation history
+ *
+ * @param conversation The conversation history
+ * @param config Configuration object containing API settings
+ * @return The API response text
+ * @throws ApiException on HTTP errors
+ * @throws NetworkException on network/connection errors
+ * @throws ConfigurationException on invalid configuration
+ * @throws ValidationException on invalid input data
+ */
+std::string get_gpt_chat_response(const Conversation& conversation, const Config& config);
+
+/**
+ * @brief Sends a streaming chat completion request
+ *
+ * @param prompt The user's input prompt
+ * @param config Configuration object containing API settings
+ * @param callback Function called for each response chunk
+ * @throws ApiException on HTTP errors
+ * @throws NetworkException on network/connection errors
+ * @throws ConfigurationException on invalid configuration
+ * @throws ValidationException on invalid input data
+ */
+void get_gpt_chat_response_stream(std::string_view prompt, const Config& config,
+                                  StreamCallback callback);
+
+/**
+ * @brief Sends a streaming chat completion request with conversation history
+ *
+ * @param conversation The conversation history
+ * @param config Configuration object containing API settings
+ * @param callback Function called for each response chunk
+ * @throws ApiException on HTTP errors
+ * @throws NetworkException on network/connection errors
+ * @throws ConfigurationException on invalid configuration
+ * @throws ValidationException on invalid input data
+ */
+void get_gpt_chat_response_stream(const Conversation& conversation, const Config& config,
+                                  StreamCallback callback);
+
+/**
+ * @brief Format output based on the specified format
+ *
+ * @param content The content to format
+ * @param format The desired output format
+ * @return Formatted string
+ */
+std::string format_output(const std::string& content, OutputFormat format);
+
+/**
+ * @brief Run interactive REPL mode
+ *
+ * @param config Configuration object
+ */
+void run_interactive_mode(Config& config);
 
 } // namespace cmdgpt
 

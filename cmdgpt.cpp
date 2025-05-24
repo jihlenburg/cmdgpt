@@ -1,3 +1,14 @@
+/**
+ * @file cmdgpt.cpp
+ * @brief Implementation of cmdgpt functionality
+ * @author Joern Ihlenburg
+ * @date 2023-2024
+ *
+ * This file contains the implementation of all core cmdgpt functionality
+ * including API communication, configuration management, conversation
+ * handling, and output formatting.
+ */
+
 /*
 MIT License
 
@@ -28,14 +39,22 @@ SOFTWARE.
 #include "spdlog/sinks/ansicolor_sink.h"
 #include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/spdlog.h"
+#include <algorithm>
 #include <cstdlib>
+#include <ctime>
+#include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <optional>
+#include <regex>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
 using json = nlohmann::json;
 using namespace cmdgpt;
+namespace fs = std::filesystem;
 
 // Map of string log levels to spdlog::level::level_enum values
 const std::map<std::string, spdlog::level::level_enum> log_levels = {
@@ -55,22 +74,33 @@ void cmdgpt::print_help()
     std::cout << "Usage: cmdgpt [options] [prompt]\n"
               << "Options:\n"
               << "  -h, --help              Show this help message and exit\n"
+              << "  -v, --version           Print the version of the program and exit\n"
+              << "  -i, --interactive       Run in interactive mode (REPL)\n"
+              << "  --stream                Enable streaming responses (not yet implemented)\n"
+              << "  -f, --format FORMAT     Output format: plain, markdown, json, code\n"
               << "  -k, --api_key KEY       Set the OpenAI API key to KEY\n"
               << "  -s, --sys_prompt PROMPT Set the system prompt to PROMPT\n"
               << "  -l, --log_file FILE     Set the log file to FILE\n"
               << "  -m, --gpt_model MODEL   Set the GPT model to MODEL\n"
               << "  -L, --log_level LEVEL   Set the log level to LEVEL\n"
               << "                          (TRACE, DEBUG, INFO, WARN, ERROR, CRITICAL)\n"
-              << "  -v, --version           Print the version of the program and exit\n"
-              << "prompt:\n"
-              << "  The text prompt to send to the OpenAI GPT API. If not provided, the program "
-                 "will read from stdin.\n"
+              << "\nprompt:\n"
+              << "  The text prompt to send to the OpenAI GPT API. If not provided, the program\n"
+              << "  will read from stdin (unless in interactive mode).\n"
+              << "\nInteractive Mode Commands:\n"
+              << "  /help     Show available commands\n"
+              << "  /clear    Clear conversation history\n"
+              << "  /save     Save conversation to file\n"
+              << "  /load     Load conversation from file\n"
+              << "  /exit     Exit interactive mode\n"
+              << "\nConfiguration File:\n"
+              << "  ~/.cmdgptrc    Configuration file with key=value pairs\n"
               << "\nEnvironment Variables:\n"
-              << "  OPENAI_API_KEY     API key for the OpenAI GPT API.\n"
-              << "  OPENAI_SYS_PROMPT  System prompt for the OpenAI GPT API.\n"
-              << "  CMDGPT_LOG_FILE    Logfile to record messages.\n"
-              << "  OPENAI_GPT_MODEL   GPT model to use.\n"
-              << "  CMDGPT_LOG_LEVEL   Log level.\n";
+              << "  OPENAI_API_KEY     API key for the OpenAI GPT API\n"
+              << "  OPENAI_SYS_PROMPT  System prompt for the OpenAI GPT API\n"
+              << "  CMDGPT_LOG_FILE    Logfile to record messages\n"
+              << "  OPENAI_GPT_MODEL   GPT model to use\n"
+              << "  CMDGPT_LOG_LEVEL   Log level\n";
 }
 
 /**
@@ -136,6 +166,24 @@ std::string cmdgpt::redact_api_key(std::string_view api_key)
     result += std::string(api_key.length() - 8, '*');
     result += api_key.substr(api_key.length() - 4);
     return result;
+}
+
+/**
+ * @brief Parse output format from string
+ */
+OutputFormat cmdgpt::parse_output_format(std::string_view format)
+{
+    std::string fmt{format};
+    std::transform(fmt.begin(), fmt.end(), fmt.begin(), ::tolower);
+
+    if (fmt == "markdown" || fmt == "md")
+        return OutputFormat::MARKDOWN;
+    else if (fmt == "json")
+        return OutputFormat::JSON;
+    else if (fmt == "code")
+        return OutputFormat::CODE;
+    else
+        return OutputFormat::PLAIN;
 }
 
 /**
@@ -420,4 +468,447 @@ std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, const Config&
 
     // Use the legacy function for now, but with validated config
     return get_gpt_chat_response(prompt, config.api_key(), config.system_prompt(), config.model());
+}
+
+/**
+ * @brief Conversation class implementation
+ */
+void cmdgpt::Conversation::add_message(std::string_view role, std::string_view content)
+{
+    messages_.emplace_back(role, content);
+
+    // Trim conversation if it gets too long
+    while (estimate_tokens() > MAX_CONTEXT_LENGTH)
+    {
+        if (messages_.size() <= 2) // Keep at least system + one user message
+            break;
+        messages_.erase(messages_.begin() + 1); // Remove oldest non-system message
+    }
+}
+
+void cmdgpt::Conversation::clear()
+{
+    messages_.clear();
+}
+
+void cmdgpt::Conversation::save_to_file(const fs::path& path) const
+{
+    std::ofstream file(path);
+    if (!file)
+    {
+        throw std::runtime_error("Failed to open file for writing: " + path.string());
+    }
+
+    file << to_json();
+}
+
+void cmdgpt::Conversation::load_from_file(const fs::path& path)
+{
+    std::ifstream file(path);
+    if (!file)
+    {
+        throw std::runtime_error("Failed to open file for reading: " + path.string());
+    }
+
+    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+
+    try
+    {
+        json j = json::parse(content);
+        messages_.clear();
+
+        for (const auto& msg : j["messages"])
+        {
+            messages_.emplace_back(msg["role"].get<std::string>(),
+                                   msg["content"].get<std::string>());
+        }
+    }
+    catch (const json::exception& e)
+    {
+        throw std::runtime_error("Failed to parse conversation file: " + std::string(e.what()));
+    }
+}
+
+std::string cmdgpt::Conversation::to_json() const
+{
+    json j;
+    j["messages"] = json::array();
+
+    for (const auto& msg : messages_)
+    {
+        j["messages"].push_back({{"role", msg.role}, {"content", msg.content}});
+    }
+
+    return j.dump(2);
+}
+
+size_t cmdgpt::Conversation::estimate_tokens() const
+{
+    size_t total = 0;
+    for (const auto& msg : messages_)
+    {
+        // Rough estimate: 1 token ~= 4 characters
+        total += (msg.role.length() + msg.content.length()) / 4;
+    }
+    return total;
+}
+
+/**
+ * @brief ConfigFile class implementation
+ */
+bool cmdgpt::ConfigFile::load(const fs::path& path)
+{
+    if (!fs::exists(path))
+        return false;
+
+    std::ifstream file(path);
+    if (!file)
+        return false;
+
+    std::string line;
+    while (std::getline(file, line))
+    {
+        // Skip comments and empty lines
+        if (line.empty() || line[0] == '#')
+            continue;
+
+        // Parse key=value pairs
+        size_t pos = line.find('=');
+        if (pos != std::string::npos)
+        {
+            std::string key = line.substr(0, pos);
+            std::string value = line.substr(pos + 1);
+
+            // Trim whitespace
+            key.erase(0, key.find_first_not_of(" \t"));
+            key.erase(key.find_last_not_of(" \t") + 1);
+            value.erase(0, value.find_first_not_of(" \t"));
+            value.erase(value.find_last_not_of(" \t") + 1);
+
+            values_[key] = value;
+        }
+    }
+
+    return true;
+}
+
+void cmdgpt::ConfigFile::save(const fs::path& path) const
+{
+    std::ofstream file(path);
+    if (!file)
+    {
+        throw std::runtime_error("Failed to open config file for writing: " + path.string());
+    }
+
+    file << "# cmdgpt configuration file\n";
+    file << "# Generated by cmdgpt " << VERSION << "\n\n";
+
+    for (const auto& [key, value] : values_)
+    {
+        file << key << "=" << value << "\n";
+    }
+}
+
+void cmdgpt::ConfigFile::apply_to(Config& config) const
+{
+    auto get_value = [this](const std::string& key) -> std::optional<std::string>
+    {
+        auto it = values_.find(key);
+        return it != values_.end() ? std::optional<std::string>(it->second) : std::nullopt;
+    };
+
+    if (auto val = get_value("api_key"))
+        config.set_api_key(*val);
+    if (auto val = get_value("system_prompt"))
+        config.set_system_prompt(*val);
+    if (auto val = get_value("model"))
+        config.set_model(*val);
+    if (auto val = get_value("log_file"))
+        config.set_log_file(*val);
+    if (auto val = get_value("log_level"))
+    {
+        auto it = log_levels.find(*val);
+        if (it != log_levels.end())
+            config.set_log_level(it->second);
+    }
+}
+
+fs::path cmdgpt::ConfigFile::get_default_path()
+{
+    const char* home = std::getenv("HOME");
+    if (!home)
+    {
+        throw std::runtime_error("HOME environment variable not set");
+    }
+
+    return fs::path(home) / ".cmdgptrc";
+}
+
+bool cmdgpt::ConfigFile::exists()
+{
+    return fs::exists(get_default_path());
+}
+
+/**
+ * @brief Send chat request with conversation history
+ */
+std::string cmdgpt::get_gpt_chat_response(const Conversation& conversation, const Config& config)
+{
+    // Validate configuration
+    config.validate();
+
+    if (config.api_key().empty())
+    {
+        throw ConfigurationException("API key not configured");
+    }
+
+    // Build messages array from conversation
+    json messages = json::array();
+    for (const auto& msg : conversation.get_messages())
+    {
+        messages.push_back(
+            {{std::string(ROLE_KEY), msg.role}, {std::string(CONTENT_KEY), msg.content}});
+    }
+
+    // Setup headers for the POST request
+    httplib::Headers headers = {{std::string(AUTHORIZATION_HEADER), "Bearer " + config.api_key()},
+                                {std::string(CONTENT_TYPE_HEADER), std::string(APPLICATION_JSON)}};
+
+    // Create the JSON payload
+    json data = {{std::string(MODEL_KEY), config.model()}, {std::string(MESSAGES_KEY), messages}};
+
+    // Initialize the HTTP client with security settings
+    httplib::Client cli{std::string(SERVER_URL)};
+
+    // Set connection and read timeouts
+    cli.set_connection_timeout(CONNECTION_TIMEOUT_SECONDS, 0);
+    cli.set_read_timeout(READ_TIMEOUT_SECONDS, 0);
+
+    // Enable certificate verification for security
+    cli.enable_server_certificate_verification(true);
+
+    // Log the request safely
+    gLogger->debug("Debug: Sending conversation request with {} messages", messages.size());
+
+    // Send the POST request
+    auto res = cli.Post(std::string(API_URL), headers, data.dump(), std::string(APPLICATION_JSON));
+
+    // Check if response was received
+    if (!res)
+    {
+        throw NetworkException("Failed to connect to OpenAI API - check network connection");
+    }
+
+    // Handle HTTP response status codes
+    const auto status = static_cast<HttpStatus>(res->status);
+    if (status != HttpStatus::OK)
+    {
+        std::string error_msg = "HTTP " + std::to_string(res->status);
+        if (!res->body.empty())
+        {
+            try
+            {
+                json error_json = json::parse(res->body);
+                if (error_json.contains("error") && error_json["error"].contains("message"))
+                {
+                    error_msg += ": " + error_json["error"]["message"].get<std::string>();
+                }
+            }
+            catch (...)
+            {
+            }
+        }
+        throw ApiException(status, error_msg);
+    }
+
+    // Parse response
+    json res_json;
+    try
+    {
+        res_json = json::parse(res->body);
+    }
+    catch (const json::parse_error& e)
+    {
+        throw ApiException(HttpStatus::EMPTY_RESPONSE,
+                           "Invalid JSON response: " + std::string(e.what()));
+    }
+
+    // Extract response content
+    if (!res_json.contains(CHOICES_KEY) || res_json[CHOICES_KEY].empty())
+    {
+        throw ApiException(HttpStatus::EMPTY_RESPONSE, "No choices in API response");
+    }
+
+    const auto& first_choice = res_json[CHOICES_KEY][0];
+    if (!first_choice.contains("message") || !first_choice["message"].contains(CONTENT_KEY))
+    {
+        throw ApiException(HttpStatus::EMPTY_RESPONSE, "No content in API response");
+    }
+
+    return first_choice["message"][CONTENT_KEY].get<std::string>();
+}
+
+/**
+ * @brief Format output based on specified format
+ */
+std::string cmdgpt::format_output(const std::string& content, OutputFormat format)
+{
+    switch (format)
+    {
+    case OutputFormat::JSON:
+    {
+        json j;
+        j["response"] = content;
+        j["timestamp"] = std::time(nullptr);
+        j["version"] = VERSION;
+        return j.dump(2);
+    }
+
+    case OutputFormat::MARKDOWN:
+    {
+        // Basic markdown formatting
+        return "## Response\n\n" + content + "\n\n---\n*Generated by cmdgpt " +
+               std::string(VERSION) + "*\n";
+    }
+
+    case OutputFormat::CODE:
+    {
+        // Extract code blocks if present
+        std::regex code_regex(R"(```(?:\w+)?\n([^`]+)```)");
+        std::smatch match;
+        if (std::regex_search(content, match, code_regex))
+        {
+            return match[1].str();
+        }
+        return content;
+    }
+
+    case OutputFormat::PLAIN:
+    default:
+        return content;
+    }
+}
+
+/**
+ * @brief Run interactive REPL mode
+ */
+void cmdgpt::run_interactive_mode(Config& config)
+{
+    std::cout << "cmdgpt " << VERSION << " - Interactive Mode\n";
+    std::cout << "Type '/help' for commands, '/exit' to quit\n\n";
+
+    Conversation conversation;
+
+    // Add system prompt to conversation
+    if (!config.system_prompt().empty())
+    {
+        conversation.add_message(SYSTEM_ROLE, config.system_prompt());
+    }
+
+    std::string line;
+    while (true)
+    {
+        std::cout << "> ";
+        if (!std::getline(std::cin, line))
+            break;
+
+        // Trim whitespace
+        line.erase(0, line.find_first_not_of(" \t"));
+        line.erase(line.find_last_not_of(" \t") + 1);
+
+        if (line.empty())
+            continue;
+
+        // Handle commands
+        if (line[0] == '/')
+        {
+            if (line == "/exit" || line == "/quit")
+            {
+                break;
+            }
+            else if (line == "/clear")
+            {
+                conversation.clear();
+                if (!config.system_prompt().empty())
+                {
+                    conversation.add_message(SYSTEM_ROLE, config.system_prompt());
+                }
+                std::cout << "Conversation cleared.\n";
+                continue;
+            }
+            else if (line == "/help")
+            {
+                std::cout << "Available commands:\n";
+                std::cout << "  /help     - Show this help message\n";
+                std::cout << "  /clear    - Clear conversation history\n";
+                std::cout << "  /save     - Save conversation to file\n";
+                std::cout << "  /load     - Load conversation from file\n";
+                std::cout << "  /exit     - Exit interactive mode\n";
+                continue;
+            }
+            else if (line.substr(0, 5) == "/save")
+            {
+                std::string filename = "conversation.json";
+                if (line.length() > 6)
+                {
+                    filename = line.substr(6);
+                }
+                try
+                {
+                    conversation.save_to_file(filename);
+                    std::cout << "Conversation saved to " << filename << "\n";
+                }
+                catch (const std::exception& e)
+                {
+                    std::cerr << "Error saving conversation: " << e.what() << "\n";
+                }
+                continue;
+            }
+            else if (line.substr(0, 5) == "/load")
+            {
+                std::string filename = "conversation.json";
+                if (line.length() > 6)
+                {
+                    filename = line.substr(6);
+                }
+                try
+                {
+                    conversation.load_from_file(filename);
+                    std::cout << "Conversation loaded from " << filename << "\n";
+                }
+                catch (const std::exception& e)
+                {
+                    std::cerr << "Error loading conversation: " << e.what() << "\n";
+                }
+                continue;
+            }
+            else
+            {
+                std::cout << "Unknown command. Type '/help' for available commands.\n";
+                continue;
+            }
+        }
+
+        // Add user message to conversation
+        conversation.add_message(USER_ROLE, line);
+
+        // Get response
+        try
+        {
+            std::cout << "\n";
+            std::string response = get_gpt_chat_response(conversation, config);
+
+            // Add assistant response to conversation
+            conversation.add_message("assistant", response);
+
+            // Display response
+            std::cout << response << "\n\n";
+        }
+        catch (const std::exception& e)
+        {
+            std::cerr << "Error: " << e.what() << "\n\n";
+        }
+    }
+
+    std::cout << "\nGoodbye!\n";
 }

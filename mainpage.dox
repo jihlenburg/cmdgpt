@@ -1,0 +1,110 @@
+/**
+ * @mainpage cmdgpt Documentation
+ * 
+ * @section intro_sec Introduction
+ * 
+ * cmdgpt is a command-line interface for interacting with OpenAI's GPT models.
+ * It provides a simple yet powerful way to access AI capabilities from your terminal.
+ * 
+ * @section features_sec Key Features
+ * 
+ * - **Interactive Mode**: REPL interface for conversational AI
+ * - **Multiple Output Formats**: Plain text, JSON, Markdown, and code extraction
+ * - **Configuration Management**: File-based and environment variable configuration
+ * - **Conversation History**: Save and load conversations
+ * - **Security Features**: Input validation, API key protection, and secure HTTPS
+ * 
+ * @section quick_start Quick Start
+ * 
+ * @subsection install_sec Installation
+ * 
+ * @code{.sh}
+ * # Clone the repository
+ * git clone https://github.com/jihlenburg/cmdgpt.git
+ * cd cmdgpt
+ * 
+ * # Build the project
+ * ./build.sh
+ * @endcode
+ * 
+ * @subsection usage_sec Basic Usage
+ * 
+ * @code{.sh}
+ * # Single query
+ * cmdgpt "What is the capital of France?"
+ * 
+ * # Interactive mode
+ * cmdgpt -i
+ * 
+ * # JSON output
+ * cmdgpt -f json "Explain quantum computing"
+ * 
+ * # Using configuration file
+ * echo "api_key=sk-..." > ~/.cmdgptrc
+ * cmdgpt "Hello!"
+ * @endcode
+ * 
+ * @section config_sec Configuration
+ * 
+ * cmdgpt supports multiple configuration methods:
+ * 
+ * 1. **Environment Variables**:
+ *    - `OPENAI_API_KEY` - Your OpenAI API key
+ *    - `OPENAI_SYS_PROMPT` - System prompt for context
+ *    - `OPENAI_GPT_MODEL` - GPT model to use
+ *    - `CMDGPT_LOG_FILE` - Log file path
+ *    - `CMDGPT_LOG_LEVEL` - Logging level
+ * 
+ * 2. **Configuration File** (`~/.cmdgptrc`):
+ *    @code
+ *    api_key=sk-...
+ *    model=gpt-4
+ *    system_prompt=You are a helpful assistant
+ *    log_level=INFO
+ *    @endcode
+ * 
+ * 3. **Command-line Arguments**: Override any configuration
+ * 
+ * @section interactive_sec Interactive Mode
+ * 
+ * Interactive mode provides a REPL interface with conversation context:
+ * 
+ * @code
+ * cmdgpt -i
+ * > Hello!
+ * Hello! How can I assist you today?
+ * 
+ * > /save my_conversation.json
+ * Conversation saved.
+ * 
+ * > /clear
+ * Conversation cleared.
+ * 
+ * > /exit
+ * Goodbye!
+ * @endcode
+ * 
+ * @section api_sec API Reference
+ * 
+ * The main components are:
+ * 
+ * - cmdgpt::Config - Configuration management
+ * - cmdgpt::Conversation - Conversation history handling
+ * - cmdgpt::get_gpt_chat_response() - Main API interaction
+ * - cmdgpt::format_output() - Output formatting
+ * 
+ * @section security_sec Security Considerations
+ * 
+ * - API keys are never logged in debug output
+ * - Input validation prevents injection attacks
+ * - HTTPS certificate verification is enabled
+ * - Size limits prevent DoS attacks
+ * 
+ * @section license_sec License
+ * 
+ * cmdgpt is released under the MIT License.
+ * 
+ * @author Joern Ihlenburg
+ * @date 2023-2024
+ * @version 0.3
+ */

@@ -93,3 +93,34 @@ include(Catch)
 
 # Automatically discover and register all tests in the test executable
 catch_discover_tests(cmdgpt_tests)
+
+# Documentation Configuration
+# Find Doxygen for generating documentation
+find_package(Doxygen OPTIONAL_COMPONENTS dot mscgen dia)
+
+if(DOXYGEN_FOUND)
+    # Set Doxygen input and output directories
+    set(DOXYGEN_IN ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile)
+    set(DOXYGEN_OUT ${CMAKE_CURRENT_BINARY_DIR}/docs)
+    
+    # Create docs directory
+    file(MAKE_DIRECTORY ${DOXYGEN_OUT})
+    
+    # Add documentation target
+    add_custom_target(docs
+        COMMAND ${DOXYGEN_EXECUTABLE} ${DOXYGEN_IN}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Generating API documentation with Doxygen"
+        VERBATIM
+    )
+    
+    # Add a clean target for documentation
+    add_custom_target(clean-docs
+        COMMAND ${CMAKE_COMMAND} -E remove_directory ${DOXYGEN_OUT}
+        COMMENT "Cleaning documentation"
+    )
+    
+    message(STATUS "Doxygen found. You can build documentation with 'make docs'")
+else()
+    message(STATUS "Doxygen not found. Documentation target will not be available")
+endif()
