@@ -4,8 +4,11 @@ cmake_minimum_required(VERSION 3.13) # FetchContent is available in 3.11+, "set 
 # Define the project and set the C++ standard
 project(cmdgpt)
 set(CMAKE_CXX_STANDARD 17)
-# set build type to Debug
-set(CMAKE_BUILD_TYPE Debug)
+
+# Set build type to Debug if not specified
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Debug)
+endif()
 
 # Include FetchContent module used for downloading dependencies
 include(FetchContent)
@@ -14,21 +17,21 @@ include(FetchContent)
 FetchContent_Declare(
   httplib
   GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
-  GIT_TAG master
+  GIT_TAG v0.14.3
 )
 
 # Declare json dependency: Define the name, the git repository, and the tag to download
 FetchContent_Declare(
   json
   GIT_REPOSITORY https://github.com/nlohmann/json.git
-  GIT_TAG master
+  GIT_TAG v3.11.3
 )
 
-# Declare json dependency: Define the name, the git repository, and the tag to download
+# Declare spdlog dependency: Define the name, the git repository, and the tag to download
 FetchContent_Declare(
   spdlog
   GIT_REPOSITORY https://github.com/gabime/spdlog.git
-  GIT_TAG master
+  GIT_TAG v1.13.0
 )
 
 FetchContent_Declare(
@@ -61,6 +64,9 @@ target_link_libraries(cmdgpt PRIVATE cmdgpt_lib)
 
 add_executable(cmdgpt_tests tests/cmdgpt_tests.cpp)
 target_link_libraries(cmdgpt_tests PRIVATE cmdgpt_lib Catch2::Catch2WithMain)
-include(CTest)
-add_test(NAME cmdgpt_tests COMMAND cmdgpt_tests)
 
+# Add Catch2 testing support
+list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
+include(CTest)
+include(Catch)
+catch_discover_tests(cmdgpt_tests)
