@@ -25,10 +25,10 @@ SOFTWARE.
 #ifndef CMDGPT_H
 #define CMDGPT_H
 
-#include <string>
+#include "spdlog/spdlog.h"
 #include <map>
 #include <memory>
-#include "spdlog/spdlog.h"
+#include <string>
 
 // Version information
 #define CMDGPT_VERSION "v0.2"
@@ -76,7 +76,7 @@ void print_help();
 
 /**
  * @brief Sends a chat completion request to the OpenAI API
- * 
+ *
  * @param prompt The user's input prompt
  * @param response Output parameter for the API response
  * @param api_key OpenAI API key (optional if set via environment)
@@ -85,10 +85,8 @@ void print_help();
  * @return HTTP status code or EMPTY_RESPONSE_CODE on failure
  */
 // cppcheck-suppress syntaxError
-int get_gpt_chat_response(const std::string& prompt,
-                          std::string& response,
-                          const std::string& api_key = "",
-                          const std::string& system_prompt = "",
+int get_gpt_chat_response(const std::string& prompt, std::string& response,
+                          const std::string& api_key = "", const std::string& system_prompt = "",
                           const std::string& model = DEFAULT_MODEL);
 
 #endif // CMDGPT_H

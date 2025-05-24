@@ -22,29 +22,25 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#include <iostream>
-#include <string>
-#include <stdexcept>
-#include <cstdlib>
-#include <fstream>
+#include "cmdgpt.h"
 #include "httplib.h"
 #include "nlohmann/json.hpp"
-#include "spdlog/spdlog.h"
 #include "spdlog/sinks/ansicolor_sink.h"
 #include "spdlog/sinks/file_sinks.h"
-#include "cmdgpt.h"
+#include "spdlog/spdlog.h"
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <stdexcept>
+#include <string>
 
 using json = nlohmann::json;
 
 // Map of string log levels to spdlog::level::level_enum values
-const std::map<std::string, spdlog::level::level_enum> log_levels = 
-{
-    {"TRACE", spdlog::level::trace},
-    {"DEBUG", spdlog::level::debug},
-    {"INFO", spdlog::level::info},
-    {"WARN", spdlog::level::warn},
-    {"ERROR", spdlog::level::err},
-    {"CRITICAL", spdlog::level::critical},
+const std::map<std::string, spdlog::level::level_enum> log_levels = {
+    {"TRACE", spdlog::level::trace}, {"DEBUG", spdlog::level::debug},
+    {"INFO", spdlog::level::info},   {"WARN", spdlog::level::warn},
+    {"ERROR", spdlog::level::err},   {"CRITICAL", spdlog::level::critical},
 };
 
 // Global logger variable accessible by all functions
@@ -53,7 +49,7 @@ std::shared_ptr<spdlog::logger> gLogger;
 /**
  * @brief Prints the help message to the console.
  */
-void print_help() 
+void print_help()
 {
     std::cout << "Usage: cmdgpt [options] [prompt]\n"
               << "Options:\n"
@@ -66,7 +62,8 @@ void print_help()
               << "                          (TRACE, DEBUG, INFO, WARN, ERROR, CRITICAL)\n"
               << "  -v, --version           Print the version of the program and exit\n"
               << "prompt:\n"
-              << "  The text prompt to send to the OpenAI GPT API. If not provided, the program will read from stdin.\n"
+              << "  The text prompt to send to the OpenAI GPT API. If not provided, the program "
+                 "will read from stdin.\n"
               << "\nEnvironment Variables:\n"
               << "  OPENAI_API_KEY     API key for the OpenAI GPT API.\n"
               << "  OPENAI_SYS_PROMPT  System prompt for the OpenAI GPT API.\n"
@@ -85,36 +82,25 @@ void print_help()
  * @return The HTTP response status code, or EMPTY_RESPONSE_CODE if no response was received.
  * @throws std::invalid_argument If no API key was provided.
  */
-int get_gpt_chat_response(const std::string& prompt, 
-                          std::string& response, 
-                          const std::string& api_key, 
-                          const std::string& system_prompt, 
-                          const std::string& model) 
+int get_gpt_chat_response(const std::string& prompt, std::string& response,
+                          const std::string& api_key, const std::string& system_prompt,
+                          const std::string& model)
 {
     // API key and system prompt must be provided
-    if (api_key.empty() || system_prompt.empty()) 
+    if (api_key.empty() || system_prompt.empty())
     {
         throw std::invalid_argument("API key and system prompt must be provided.");
     }
 
     // Setup headers for the POST request
-    httplib::Headers headers = 
-    {
-        { AUTHORIZATION_HEADER, "Bearer " + api_key },
-        { CONTENT_TYPE_HEADER, APPLICATION_JSON }
-    };
+    httplib::Headers headers = {{AUTHORIZATION_HEADER, "Bearer " + api_key},
+                                {CONTENT_TYPE_HEADER, APPLICATION_JSON}};
 
     // Prepare the JSON data for the POST request
-    json data = 
-    {
-        {MODEL_KEY, model},
-        {MESSAGES_KEY, 
-            {
-                {{ROLE_KEY, SYSTEM_ROLE}, {CONTENT_KEY, system_prompt}},
-                {{ROLE_KEY, USER_ROLE}, {CONTENT_KEY, prompt}}
-            }
-        }
-    };
+    json data = {{MODEL_KEY, model},
+                 {MESSAGES_KEY,
+                  {{{ROLE_KEY, SYSTEM_ROLE}, {CONTENT_KEY, system_prompt}},
+                   {{ROLE_KEY, USER_ROLE}, {CONTENT_KEY, prompt}}}}};
 
     // Initialize the HTTP client
     httplib::Client cli(SERVER_URL);
@@ -126,71 +112,72 @@ int get_gpt_chat_response(const std::string& prompt,
     auto res = cli.Post(URL, headers, data.dump(), APPLICATION_JSON);
 
     // If response is received from the server
-    if (res) 
+    if (res)
     {
-        gLogger->debug("Debug: Received HTTP response with status {} and body: {}", 
-                       res->status, res->body);
-        
+        gLogger->debug("Debug: Received HTTP response with status {} and body: {}", res->status,
+                       res->body);
+
         // Handle the HTTP response status code
-        switch (res->status) 
+        switch (res->status)
         {
-            case HTTP_OK:
-                // Everything is fine
-                break;
-                
-            case HTTP_BAD_REQUEST:
-                gLogger->error("Error: Bad request.");
-                return res->status;
-                
-            case HTTP_UNAUTHORIZED:
-                gLogger->error("Error: Unauthorized. Check your API key.");
-                return res->status;
-                
-            case HTTP_FORBIDDEN:
-                gLogger->error("Error: Forbidden. You do not have the necessary permissions.");
-                return res->status;
-                
-            case HTTP_NOT_FOUND:
-                gLogger->error("Error: Not Found. The requested URL was not found on the server.");
-                return res->status;
-                
-            case HTTP_INTERNAL_SERVER_ERROR:
-                gLogger->error("Error: Internal Server Error. The server encountered an unexpected condition.");
-                return res->status;
-                
-            default:
-                gLogger->error("Error: Received unexpected HTTP status code: {}", res->status);
-                return res->status;
+        case HTTP_OK:
+            // Everything is fine
+            break;
+
+        case HTTP_BAD_REQUEST:
+            gLogger->error("Error: Bad request.");
+            return res->status;
+
+        case HTTP_UNAUTHORIZED:
+            gLogger->error("Error: Unauthorized. Check your API key.");
+            return res->status;
+
+        case HTTP_FORBIDDEN:
+            gLogger->error("Error: Forbidden. You do not have the necessary permissions.");
+            return res->status;
+
+        case HTTP_NOT_FOUND:
+            gLogger->error("Error: Not Found. The requested URL was not found on the server.");
+            return res->status;
+
+        case HTTP_INTERNAL_SERVER_ERROR:
+            gLogger->error(
+                "Error: Internal Server Error. The server encountered an unexpected condition.");
+            return res->status;
+
+        default:
+            gLogger->error("Error: Received unexpected HTTP status code: {}", res->status);
+            return res->status;
         }
-    } 
-    else 
+    }
+    else
     {
         gLogger->debug("Debug: No response received from the server.");
         return EMPTY_RESPONSE_CODE;
     }
 
     // If response body is not empty
-    if (!res->body.empty()) 
+    if (!res->body.empty())
     {
         // Parse the JSON response
         json res_json = json::parse(res->body);
 
         // If 'choices' array is empty
-        if (res_json[CHOICES_KEY].empty()) 
+        if (res_json[CHOICES_KEY].empty())
         {
             gLogger->error("Error: '{}' array is empty.", CHOICES_KEY);
             return EMPTY_RESPONSE_CODE;
         }
-        
+
         // If 'finish_reason' field is missing
-        if (!res_json[CHOICES_KEY][0].contains(FINISH_REASON_KEY)) 
+        if (!res_json[CHOICES_KEY][0].contains(FINISH_REASON_KEY))
         {
             gLogger->error("Error: '{}' field is missing.", FINISH_REASON_KEY);
             return EMPTY_RESPONSE_CODE;
         }
-        
+
         // If 'content' field is missing
-        if (!res_json[CHOICES_KEY][0]["message"].contains(CONTENT_KEY)) 
+        if (!res_json[CHOICES_KEY][0]["message"].contains(CONTENT_KEY))
         {
             gLogger->error("Error: '{}' field is missing.", CONTENT_KEY);
             return EMPTY_RESPONSE_CODE;

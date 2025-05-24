@@ -22,16 +22,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+#include "cmdgpt.h"
+#include "spdlog/sinks/null_sink.h"
+#include "spdlog/spdlog.h"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
-#include "cmdgpt.h"
-#include "spdlog/spdlog.h"
-#include "spdlog/sinks/null_sink.h"
 
 // Test fixture to initialize logger
-struct LoggerFixture 
+struct LoggerFixture
 {
-    LoggerFixture() 
+    LoggerFixture()
     {
         // Create a null sink logger for tests to avoid file I/O
         auto null_sink = std::make_shared<spdlog::sinks::null_sink_mt>();
@@ -40,15 +40,15 @@ struct LoggerFixture
     }
 };
 
-TEST_CASE_METHOD(LoggerFixture, "Constants are defined correctly") 
+TEST_CASE_METHOD(LoggerFixture, "Constants are defined correctly")
 {
-    SECTION("Model defaults") 
+    SECTION("Model defaults")
     {
         REQUIRE(std::string(DEFAULT_MODEL) == "gpt-4");
         REQUIRE(std::string(DEFAULT_SYSTEM_PROMPT) == "You are a helpful assistant!");
     }
-    
-    SECTION("HTTP status codes") 
+
+    SECTION("HTTP status codes")
     {
         REQUIRE(HTTP_OK == 200);
         REQUIRE(HTTP_BAD_REQUEST == 400);
@@ -58,14 +58,14 @@ TEST_CASE_METHOD(LoggerFixture, "Constants are defined correctly")
         REQUIRE(HTTP_INTERNAL_SERVER_ERROR == 500);
         REQUIRE(EMPTY_RESPONSE_CODE == -1);
     }
-    
-    SECTION("API configuration") 
+
+    SECTION("API configuration")
     {
         REQUIRE(std::string(SERVER_URL) == "https://api.openai.com");
         REQUIRE(std::string(URL) == "/v1/chat/completions");
     }
-    
-    SECTION("JSON keys") 
+
+    SECTION("JSON keys")
     {
         REQUIRE(std::string(MODEL_KEY) == "model");
         REQUIRE(std::string(MESSAGES_KEY) == "messages");
@@ -76,39 +76,32 @@ TEST_CASE_METHOD(LoggerFixture, "Constants are defined correctly")
     }
 }
 
-TEST_CASE_METHOD(LoggerFixture, "API key validation") 
+TEST_CASE_METHOD(LoggerFixture, "API key validation")
 {
     std::string response;
-    
-    SECTION("Throws when API key is empty") 
+
+    SECTION("Throws when API key is empty")
     {
-        REQUIRE_THROWS_AS(
-            get_gpt_chat_response("test prompt", response, "", "system prompt"), 
-            std::invalid_argument
-        );
+        REQUIRE_THROWS_AS(get_gpt_chat_response("test prompt", response, "", "system prompt"),
+                          std::invalid_argument);
     }
-    
-    SECTION("Throws when system prompt is empty") 
+
+    SECTION("Throws when system prompt is empty")
     {
-        REQUIRE_THROWS_AS(
-            get_gpt_chat_response("test prompt", response, "api_key", ""), 
-            std::invalid_argument
-        );
+        REQUIRE_THROWS_AS(get_gpt_chat_response("test prompt", response, "api_key", ""),
+                          std::invalid_argument);
     }
-    
-    SECTION("Throws when both are empty") 
+
+    SECTION("Throws when both are empty")
     {
-        REQUIRE_THROWS_AS(
-            get_gpt_chat_response("test prompt", response, "", ""), 
-            std::invalid_argument
-        );
+        REQUIRE_THROWS_AS(get_gpt_chat_response("test prompt", response, "", ""),
+                          std::invalid_argument);
     }
-    
-    SECTION("Exception message is descriptive") 
+
+    SECTION("Exception message is descriptive")
     {
         REQUIRE_THROWS_WITH(
             get_gpt_chat_response("test prompt", response, "", ""),
-            Catch::Matchers::ContainsSubstring("API key and system prompt must be provided.")
-        );
+            Catch::Matchers::ContainsSubstring("API key and system prompt must be provided."));
     }
 }
