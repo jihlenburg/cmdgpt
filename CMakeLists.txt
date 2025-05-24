@@ -121,6 +121,7 @@ if(DOXYGEN_FOUND)
     )
     
     message(STATUS "Doxygen found. You can build documentation with 'make docs'")
+    message(STATUS "Or use './build_docs.sh' for better formatting and automatic browser opening")
 else()
     message(WARNING "Doxygen not found. Documentation target will not be available")
     message(STATUS "To install Doxygen:")

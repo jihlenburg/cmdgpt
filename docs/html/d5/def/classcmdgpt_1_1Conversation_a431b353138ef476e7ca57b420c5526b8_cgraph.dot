@@ -1,0 +1,11 @@
+digraph "cmdgpt::Conversation::add_message"
+{
+ // LATEX_PDF_SIZE
+  bgcolor="transparent";
+  edge [fontname=Helvetica,fontsize=10,labelfontname=Helvetica,labelfontsize=10];
+  node [fontname=Helvetica,fontsize=10,shape=box,height=0.2,width=0.4];
+  rankdir="LR";
+  Node1 [id="Node000001",label="cmdgpt::Conversation\l::add_message",height=0.2,width=0.4,color="gray40", fillcolor="grey60", style="filled", fontcolor="black",tooltip="Add a message to the conversation."];
+  Node1 -> Node2 [id="edge1_Node000001_Node000002",color="steelblue1",style="solid",tooltip=" "];
+  Node2 [id="Node000002",label="cmdgpt::Conversation\l::estimate_tokens",height=0.2,width=0.4,color="grey40", fillcolor="white", style="filled",URL="$d5/def/classcmdgpt_1_1Conversation.html#a38e6733e3ca8741f76eb91e04a3c1ff2",tooltip="Estimate token count for the conversation."];
+}

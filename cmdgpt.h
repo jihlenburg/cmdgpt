@@ -553,16 +553,7 @@ void print_help();
 
 /**
  * @brief Sends a chat completion request to the OpenAI API (legacy interface)
- *
- * @param prompt The user's input prompt
- * @param api_key OpenAI API key (empty string uses environment variable)
- * @param system_prompt System prompt to set context (empty string uses default)
- * @param model The model to use (empty string uses default)
- * @return The API response text
- * @throws ApiException on HTTP errors
- * @throws NetworkException on network/connection errors
- * @throws ConfigurationException on invalid configuration
- * @throws ValidationException on invalid input data
+ * @see Implementation for detailed parameter documentation
  */
 std::string get_gpt_chat_response(std::string_view prompt, std::string_view api_key = "",
                                   std::string_view system_prompt = "", std::string_view model = "");

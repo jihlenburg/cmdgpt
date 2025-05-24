@@ -177,6 +177,31 @@ This project follows the Allman (BSD) coding style:
 ./build/cmdgpt_tests "Constants are defined correctly"
 ```
 
+### Building Documentation
+
+The project uses Doxygen for API documentation generation:
+
+```bash
+# Build documentation using the convenience script
+./build_docs.sh
+
+# Auto-install missing dependencies (macOS only)
+./build_docs.sh --auto-install
+
+# Build documentation using CMake
+cd build && make docs
+
+# View documentation
+open docs/html/index.html  # macOS
+xdg-open docs/html/index.html  # Linux
+```
+
+The documentation includes:
+- Complete API reference
+- Class hierarchy diagrams
+- Call graphs (requires Graphviz)
+- Usage examples
+
 ### Contributing
 
 1. Fork the repository
