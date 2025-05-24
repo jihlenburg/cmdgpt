@@ -1,0 +1,9 @@
+<map id="cmdgpt::Conversation::estimate_tokens" name="cmdgpt::Conversation::estimate_tokens">
+<area shape="rect" id="Node000001" title="Estimate token count for the conversation." alt="" coords="544,5,694,46"/>
+<area shape="rect" id="Node000002" href="$d5/def/classcmdgpt_1_1Conversation.html#a431b353138ef476e7ca57b420c5526b8" title="Add a message to the conversation." alt="" coords="347,5,496,46"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="529,28,497,28,497,23,529,23"/>
+<area shape="rect" id="Node000003" href="$d0/d05/namespacecmdgpt.html#abf82caf2672c9725565702d40cd379e6" title="Run interactive REPL mode." alt="" coords="103,13,299,38"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="331,28,300,28,300,23,331,23"/>
+<area shape="rect" id="Node000004" href="$df/d0a/main_8cpp.html#a814244b02f6701fd8ead246678bb3dae" title="Parses command&#45;line arguments and environment variables." alt="" coords="5,13,55,38"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="87,28,55,28,55,23,87,23"/>
+</map>

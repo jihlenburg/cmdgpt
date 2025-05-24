@@ -17,7 +17,7 @@ var searchData=
   ['streamcallback_14',['StreamCallback',['../d0/d05/namespacecmdgpt.html#aed6d34e4c7da82165943cb2e4cc44562',1,'cmdgpt']]],
   ['structure_15',['Project Structure',['..//Users/jihlenburg/Documents/Work/cmdgpt/README.md#autotoc_md13',1,'']]],
   ['style_16',['Code Style',['..//Users/jihlenburg/Documents/Work/cmdgpt/README.md#autotoc_md14',1,'']]],
-  ['support_17',['Support',['..//Users/jihlenburg/Documents/Work/cmdgpt/README.md#autotoc_md21',1,'']]],
+  ['support_17',['Support',['..//Users/jihlenburg/Documents/Work/cmdgpt/README.md#autotoc_md22',1,'']]],
   ['system_5fprompt_18',['system_prompt',['../de/d57/classcmdgpt_1_1Config.html#acae23c39d092d92cfa981df414b03cd9',1,'cmdgpt::Config']]],
   ['system_5fprompt_5f_19',['system_prompt_',['../de/d57/classcmdgpt_1_1Config.html#ab1031c0269b8776264651737ce3deb4a',1,'cmdgpt::Config']]],
   ['system_5frole_20',['SYSTEM_ROLE',['../d0/d05/namespacecmdgpt.html#a9091a2432308f77dfae11e440da7f6f6',1,'cmdgpt']]]

@@ -1,0 +1,5 @@
+<map id="cmdgpt::Conversation::save_to_file" name="cmdgpt::Conversation::save_to_file">
+<area shape="rect" id="Node000001" title="Save conversation to a JSON file." alt="" coords="5,5,155,46"/>
+<area shape="rect" id="Node000002" href="$d5/def/classcmdgpt_1_1Conversation.html#a5798710bb2ff327fdcf0b5efc4d96951" title="Get conversation as formatted JSON string." alt="" coords="203,5,352,46"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="155,23,187,23,187,28,155,28"/>
+</map>

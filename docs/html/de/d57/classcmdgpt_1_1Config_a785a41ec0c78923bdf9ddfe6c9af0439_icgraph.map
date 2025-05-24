@@ -1,0 +1,9 @@
+<map id="cmdgpt::Config::api_key" name="cmdgpt::Config::api_key">
+<area shape="rect" id="Node000001" title="Get configured API key." alt="" coords="201,78,364,104"/>
+<area shape="rect" id="Node000002" href="$d0/d05/namespacecmdgpt.html#afcc71e70bfea7ed640705a027ca741e4" title="Sends a chat completion request with conversation history." alt="" coords="5,5,153,46"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="225,75,144,49,146,44,226,70"/>
+<area shape="rect" id="Node000003" href="$d0/d05/namespacecmdgpt.html#abced6f324d1b470766d2a964e5f6d108" title="Sends a chat completion request to the OpenAI API (modern interface)" alt="" coords="5,71,153,111"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="185,94,153,94,153,88,185,88"/>
+<area shape="rect" id="Node000004" href="$df/d0a/main_8cpp.html#a814244b02f6701fd8ead246678bb3dae" title="Parses command&#45;line arguments and environment variables." alt="" coords="54,136,104,161"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="220,111,105,144,103,139,219,106"/>
+</map>

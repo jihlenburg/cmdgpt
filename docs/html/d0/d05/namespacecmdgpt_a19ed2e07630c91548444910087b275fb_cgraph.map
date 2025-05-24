@@ -1,0 +1,9 @@
+<map id="cmdgpt::get_gpt_chat_response" name="cmdgpt::get_gpt_chat_response">
+<area shape="rect" id="Node000001" title="Sends a chat completion request to the OpenAI API (legacy interface)" alt="" coords="5,47,153,88"/>
+<area shape="rect" id="Node000002" href="$d0/d05/namespacecmdgpt.html#aa671517c84d1e5bab477438aca0cf82d" title="Returns a redacted version of API key for logging." alt="" coords="205,5,366,31"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="153,47,214,32,215,38,154,52"/>
+<area shape="rect" id="Node000003" href="$d0/d05/namespacecmdgpt.html#a2a8346a32e6ad2d2a118e0c3a084761e" title="Validates and sanitizes API key input." alt="" coords="201,55,370,80"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="153,65,185,65,185,70,153,70"/>
+<area shape="rect" id="Node000004" href="$d0/d05/namespacecmdgpt.html#a5388bc50f7e07fa57f66b229d1a0e0f5" title="Validates input prompt length and content." alt="" coords="203,104,368,130"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="154,83,215,97,214,103,153,88"/>
+</map>

@@ -6,5 +6,5 @@ var searchData=
   ['status_20codes_3',['Exit Status Codes',['..//Users/jihlenburg/Documents/Work/cmdgpt/README.md#autotoc_md11',1,'']]],
   ['structure_4',['Project Structure',['..//Users/jihlenburg/Documents/Work/cmdgpt/README.md#autotoc_md13',1,'']]],
   ['style_5',['Code Style',['..//Users/jihlenburg/Documents/Work/cmdgpt/README.md#autotoc_md14',1,'']]],
-  ['support_6',['Support',['..//Users/jihlenburg/Documents/Work/cmdgpt/README.md#autotoc_md21',1,'']]]
+  ['support_6',['Support',['..//Users/jihlenburg/Documents/Work/cmdgpt/README.md#autotoc_md22',1,'']]]
 ];

@@ -1,0 +1,5 @@
+<map id="cmdgpt::Config::set_api_key" name="cmdgpt::Config::set_api_key">
+<area shape="rect" id="Node000001" title="Set API key with validation." alt="" coords="5,5,142,46"/>
+<area shape="rect" id="Node000002" href="$d0/d05/namespacecmdgpt.html#a2a8346a32e6ad2d2a118e0c3a084761e" title="Validates and sanitizes API key input." alt="" coords="190,13,359,38"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="142,23,174,23,174,28,142,28"/>
+</map>

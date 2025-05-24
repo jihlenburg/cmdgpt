@@ -1,0 +1,23 @@
+<map id="cmdgpt::validate_api_key" name="cmdgpt::validate_api_key">
+<area shape="rect" id="Node000001" title="Validates and sanitizes API key input." alt="" coords="558,149,728,175"/>
+<area shape="rect" id="Node000002" href="$d0/d05/namespacecmdgpt.html#a19ed2e07630c91548444910087b275fb" title="Sends a chat completion request to the OpenAI API (legacy interface)" alt="" coords="355,142,502,182"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="543,165,503,165,503,159,543,159"/>
+<area shape="rect" id="Node000006" href="$de/d57/classcmdgpt_1_1Config.html#a3f1874f49c3eedcd0236a99ada710b1d" title="Set API key with validation." alt="" coords="360,34,497,74"/>
+<area shape="poly" id="edge6_Node000001_Node000006" title=" " alt="" coords="601,144,470,77,472,73,603,139"/>
+<area shape="rect" id="Node000008" href="$de/d57/classcmdgpt_1_1Config.html#a846dea2023000846006111edac398cb5" title="Validate all configuration values." alt="" coords="347,207,510,232"/>
+<area shape="poly" id="edge10_Node000001_Node000008" title=" " alt="" coords="578,182,480,209,479,203,577,177"/>
+<area shape="rect" id="Node000003" href="$d0/d05/namespacecmdgpt.html#abced6f324d1b470766d2a964e5f6d108" title="Sends a chat completion request to the OpenAI API (modern interface)" alt="" coords="127,199,274,240"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="341,187,276,204,274,198,340,182"/>
+<area shape="rect" id="Node000004" href="$df/d0a/main_8cpp.html#a814244b02f6701fd8ead246678bb3dae" title="Parses command&#45;line arguments and environment variables." alt="" coords="5,71,55,96"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="339,147,55,91,56,86,340,142"/>
+<area shape="rect" id="Node000005" href="$d0/d05/namespacecmdgpt.html#abf82caf2672c9725565702d40cd379e6" title="Run interactive REPL mode." alt="" coords="103,149,299,175"/>
+<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="340,165,300,165,300,159,340,159"/>
+<area shape="poly" id="edge5_Node000005_Node000004" title=" " alt="" coords="135,146,101,133,47,99,50,94,104,128,137,141"/>
+<area shape="poly" id="edge9_Node000006_Node000004" title=" " alt="" coords="354,32,298,18,234,10,168,10,135,15,104,25,85,34,69,46,44,72,40,68,65,42,83,29,102,20,134,10,167,5,234,4,299,13,355,26"/>
+<area shape="rect" id="Node000007" href="$d3/d46/classcmdgpt_1_1ConfigFile.html#a885b77f9decce10ebce9de898f884afe" title="Apply loaded configuration to a Config object." alt="" coords="135,34,266,74"/>
+<area shape="poly" id="edge7_Node000006_Node000007" title=" " alt="" coords="345,57,267,57,267,51,345,51"/>
+<area shape="poly" id="edge8_Node000007_Node000004" title=" " alt="" coords="120,71,56,82,55,77,120,65"/>
+<area shape="poly" id="edge12_Node000008_Node000003" title=" " alt="" coords="332,222,275,222,275,217,332,217"/>
+<area shape="rect" id="Node000009" href="$d0/d05/namespacecmdgpt.html#afcc71e70bfea7ed640705a027ca741e4" title="Sends a chat completion request with conversation history." alt="" coords="127,264,274,305"/>
+<area shape="poly" id="edge11_Node000008_Node000009" title=" " alt="" coords="367,240,275,266,274,261,366,235"/>
+</map>

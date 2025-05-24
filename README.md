@@ -185,8 +185,14 @@ The project uses Doxygen for API documentation generation:
 # Build documentation using the convenience script
 ./build_docs.sh
 
+# Build and open in browser
+./build_docs.sh --open
+
 # Auto-install missing dependencies (macOS only)
 ./build_docs.sh --auto-install
+
+# Combine options
+./build_docs.sh --auto-install --open
 
 # Build documentation using CMake
 cd build && make docs

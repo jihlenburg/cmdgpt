@@ -1,0 +1,5 @@
+<map id="cmdgpt::Conversation::add_message" name="cmdgpt::Conversation::add_message">
+<area shape="rect" id="Node000001" title="Add a message to the conversation." alt="" coords="5,5,155,46"/>
+<area shape="rect" id="Node000002" href="$d5/def/classcmdgpt_1_1Conversation.html#a38e6733e3ca8741f76eb91e04a3c1ff2" title="Estimate token count for the conversation." alt="" coords="203,5,352,46"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="155,23,187,23,187,28,155,28"/>
+</map>

@@ -11,10 +11,15 @@ NC='\033[0m' # No Color
 
 # Parse command line arguments
 AUTO_INSTALL=false
+OPEN_BROWSER=false
 for arg in "$@"; do
     case $arg in
         --auto-install|-y)
             AUTO_INSTALL=true
+            shift
+            ;;
+        --open|-o)
+            OPEN_BROWSER=true
             shift
             ;;
         --help|-h)
@@ -22,6 +27,7 @@ for arg in "$@"; do
             echo ""
             echo "Options:"
             echo "  --auto-install, -y    Automatically install missing dependencies without prompting"
+            echo "  --open, -o           Open documentation in browser after building"
             echo "  --help, -h           Show this help message"
             exit 0
             ;;
@@ -104,11 +110,17 @@ if [ $? -eq 0 ]; then
     echo "View documentation:"
     echo "  Open: docs/html/index.html"
     
-    # Try to open in default browser on macOS
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        echo ""
-        echo "Opening documentation in browser..."
-        open docs/html/index.html
+    # Open in browser if requested
+    if [[ "$OPEN_BROWSER" == true ]]; then
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            echo ""
+            echo "Opening documentation in browser..."
+            open docs/html/index.html
+        elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            echo ""
+            echo "Opening documentation in browser..."
+            xdg-open docs/html/index.html 2>/dev/null || echo "Could not open browser automatically"
+        fi
     fi
 else
     echo -e "${RED}Error: Documentation generation failed.${NC}"

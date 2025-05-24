@@ -1,0 +1,13 @@
+<map id="cmdgpt::get_gpt_chat_response" name="cmdgpt::get_gpt_chat_response">
+<area shape="rect" id="Node000001" title="Sends a chat completion request with conversation history." alt="" coords="5,84,153,125"/>
+<area shape="rect" id="Node000002" href="$de/d57/classcmdgpt_1_1Config.html#a785a41ec0c78923bdf9ddfe6c9af0439" title="Get configured API key." alt="" coords="201,5,364,31"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="116,81,200,41,219,34,221,39,202,46,119,86"/>
+<area shape="rect" id="Node000003" href="$d5/def/classcmdgpt_1_1Conversation.html#ac4344152804352f5d4cd3bda317ed447" title="Get all messages in the conversation." alt="" coords="208,55,357,96"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="152,92,192,86,193,91,153,97"/>
+<area shape="rect" id="Node000004" href="$de/d57/classcmdgpt_1_1Config.html#a74f0a600cdc28022c9889a7db026573a" title="Get configured model name." alt="" coords="206,120,359,146"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="153,112,191,118,190,123,152,118"/>
+<area shape="rect" id="Node000005" href="$de/d57/classcmdgpt_1_1Config.html#a846dea2023000846006111edac398cb5" title="Validate all configuration values." alt="" coords="201,169,364,195"/>
+<area shape="poly" id="edge4_Node000001_Node000005" title=" " alt="" coords="125,123,202,156,219,162,217,167,200,161,123,128"/>
+<area shape="rect" id="Node000006" href="$d0/d05/namespacecmdgpt.html#a2a8346a32e6ad2d2a118e0c3a084761e" title="Validates and sanitizes API key input." alt="" coords="412,169,581,195"/>
+<area shape="poly" id="edge5_Node000005_Node000006" title=" " alt="" coords="364,180,396,180,396,185,364,185"/>
+</map>
