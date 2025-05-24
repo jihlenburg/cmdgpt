@@ -49,6 +49,14 @@ set(SPDLOG_BUILD_TESTING OFF)
 FetchContent_MakeAvailable(httplib json spdlog Catch2)
 
 # We need OpenSSL... 
+if(WIN32)
+    # Windows needs special handling for OpenSSL
+    if(DEFINED ENV{OPENSSL_ROOT_DIR})
+        set(OPENSSL_ROOT_DIR $ENV{OPENSSL_ROOT_DIR})
+    endif()
+    set(OPENSSL_USE_STATIC_LIBS TRUE)
+endif()
+
 find_package(OpenSSL REQUIRED)
 if(OPENSSL_FOUND)
     add_definitions(-DCPPHTTPLIB_OPENSSL_SUPPORT)
@@ -56,8 +64,15 @@ if(OPENSSL_FOUND)
 endif()
 
 add_library(cmdgpt_lib STATIC cmdgpt.cpp)
-target_include_directories(cmdgpt_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${httplib_SOURCE_DIR} ${json_SOURCE_DIR}/include ${spdlog_SOURCE_DIR}/include)
-target_link_libraries(cmdgpt_lib PUBLIC nlohmann_json::nlohmann_json spdlog ${OPENSSL_LIBRARIES})
+target_include_directories(cmdgpt_lib PUBLIC 
+    ${CMAKE_CURRENT_SOURCE_DIR} 
+    ${httplib_SOURCE_DIR} 
+    ${json_SOURCE_DIR}/include 
+    ${spdlog_SOURCE_DIR}/include)
+target_link_libraries(cmdgpt_lib PUBLIC 
+    nlohmann_json::nlohmann_json 
+    spdlog::spdlog 
+    ${OPENSSL_LIBRARIES})
 
 add_executable(cmdgpt main.cpp)
 target_link_libraries(cmdgpt PRIVATE cmdgpt_lib)
