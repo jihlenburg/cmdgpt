@@ -1,77 +1,212 @@
 # CmdGPT
 
-CmdGPT is a command-line interface (CLI) tool designed to interact with the OpenAI GPT API. It enables users to send prompts and receive responses from the GPT model.
+[![Build and Test](https://github.com/jihlenburg/cmdgpt/actions/workflows/build.yml/badge.svg)](https://github.com/jihlenburg/cmdgpt/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Version](https://img.shields.io/badge/version-0.2-blue.svg)](CHANGELOG.md)
+
+CmdGPT is a command-line interface (CLI) tool designed to interact with the OpenAI GPT API. It enables users to send prompts and receive responses from GPT models directly from the terminal.
+
+## Features
+
+- 🚀 Fast and lightweight CLI for OpenAI's GPT models
+- 🔧 Support for multiple GPT models (GPT-4, GPT-3.5-turbo, etc.)
+- 📝 Configurable system prompts for context setting
+- 🔐 Secure API key handling via environment variables or command-line
+- 📊 Multi-level logging with file and console output
+- 🖥️ Cross-platform support (Linux, macOS, Windows)
+- 🧪 Comprehensive test suite with Catch2
 
 ## Prerequisites
 
-For building and running this application, you need:
+- C++17 compatible compiler (GCC 7+, Clang 5+, MSVC 2017+)
+- CMake 3.13 or higher
+- OpenSSL development libraries
+- Internet connection for downloading dependencies
 
-- A compiler that supports C++17.
-- CMake version 3.14 or higher.
+## Quick Start
 
-## Building Instructions
+### Using the Unified Build Script (Linux/macOS)
 
-The project uses the [cpp-httplib](https://github.com/yhirose/cpp-httplib) and [nlohmann-json](https://github.com/nlohmann/json) libraries. These are fetched and built automatically during the project build with CMake.
+The easiest way to build CmdGPT is using the provided build script:
 
-Follow these steps to build the project:
+```bash
+chmod +x build.sh
+./build.sh
+```
 
-1. Open a terminal in the project root directory.
-2. Create a new directory for the build output:
+This script will:
+- Detect your operating system
+- Install necessary dependencies
+- Configure and build the project
+- Run the test suite
 
-    ```sh
-    mkdir build
-    cd build
-    ```
+### Manual Build Instructions
 
-3. Run CMake to configure the build and generate the Makefile:
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/jihlenburg/cmdgpt.git
+   cd cmdgpt
+   ```
 
-    ```sh
-    cmake ..
-    ```
+2. Create a build directory:
+   ```bash
+   mkdir build && cd build
+   ```
 
-4. Build the project using make:
+3. Configure with CMake:
+   ```bash
+   cmake ..
+   ```
 
-    ```sh
-    make
-    ```
+4. Build the project:
+   ```bash
+   make -j$(nproc)  # Linux
+   make -j$(sysctl -n hw.ncpu)  # macOS
+   ```
 
-The `cmdgpt` executable will be located in the `build` directory upon successful compilation.
+5. Run tests:
+   ```bash
+   ./cmdgpt_tests
+   ```
 
 ## Usage
 
-The usage format is: `cmdgpt [options] prompt`
+### Basic Usage
 
-Options:
+```bash
+# Set your OpenAI API key
+export OPENAI_API_KEY="your-api-key"
 
-- `-h, --help`: Display the help message.
-- `-k, --api_key`: Enter the API key for the OpenAI GPT API.
-- `-s, --sys_prompt`: Enter the system prompt for the OpenAI GPT API.
-- `-l, --log_file`: Specify the logfile to record messages.
-- `-m, --gpt_model`: Choose the GPT model to use (default: gpt-4).
-- `-L, --log_level`: Set the log level (TRACE, DEBUG, INFO, WARN, ERROR, CRITICAL). The default is WARN.
+# Send a prompt
+./cmdgpt "What is the capital of France?"
 
-## Environment Variables
+# Use a specific model
+./cmdgpt -m gpt-3.5-turbo "Explain quantum computing"
 
-You can use the following environment variables to set the corresponding parameters:
+# Set a custom system prompt
+./cmdgpt -s "You are a helpful coding assistant" "Write a Python hello world"
+```
 
-- `OPENAI_API_KEY`: API key for the OpenAI GPT API.
-- `OPENAI_SYS_PROMPT`: System prompt for the OpenAI GPT API.
-- `CMDGPT_LOG_FILE`: Logfile to record messages.
-- `OPENAI_GPT_MODEL`: GPT model to use.
-- `CMDGPT_LOG_LEVEL`: Log level.
+### Command-Line Options
 
-If both a command-line option and an environment variable are provided, the command-line option will be prioritized.
+| Option | Long Form | Description |
+|--------|-----------|-------------|
+| `-h` | `--help` | Show help message and exit |
+| `-v` | `--version` | Display version information |
+| `-k` | `--api_key` | Set OpenAI API key |
+| `-s` | `--sys_prompt` | Set system prompt for context |
+| `-m` | `--gpt_model` | Choose GPT model (default: gpt-4) |
+| `-l` | `--log_file` | Specify log file path |
+| `-L` | `--log_level` | Set log level (TRACE, DEBUG, INFO, WARN, ERROR, CRITICAL) |
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OPENAI_API_KEY` | Your OpenAI API key | (required) |
+| `OPENAI_SYS_PROMPT` | System prompt for the model | "You are a helpful assistant!" |
+| `OPENAI_GPT_MODEL` | GPT model to use | "gpt-4" |
+| `CMDGPT_LOG_FILE` | Log file path | "logfile.txt" |
+| `CMDGPT_LOG_LEVEL` | Logging level | "WARN" |
+
+### Examples
+
+```bash
+# Pipe input from another command
+echo "Translate to Spanish: Hello, world!" | ./cmdgpt
+
+# Use with shell scripting
+RESPONSE=$(./cmdgpt "Generate a random UUID")
+echo "Generated UUID: $RESPONSE"
+
+# Enable debug logging
+./cmdgpt -L DEBUG -l debug.log "Debug this prompt"
+
+# Use a different model with custom system prompt
+./cmdgpt -m gpt-3.5-turbo -s "You are a pirate" "Tell me about treasure"
+```
 
 ## Exit Status Codes
 
-The tool utilizes the following exit status codes:
+The tool follows standard Unix exit codes:
 
-- 0: Success.
-- 64: Command-line usage error.
-- 78: Configuration error.
-- 75: Temporary failure.
-- 1: Other unspecified errors.
+| Code | Meaning | Description |
+|------|---------|-------------|
+| 0 | Success | Request completed successfully |
+| 1 | General Error | Unspecified error occurred |
+| 64 | Usage Error | Invalid command-line arguments |
+| 75 | Temp Failure | Temporary failure (network, API) |
+| 78 | Config Error | Configuration error (missing API key) |
 
-## Note
+## Development
 
-Please note that the `-L` option and the `CMDGPT_LOG_LEVEL` environment variable expect a log level in uppercase. If an invalid log level is provided, the default log level (WARN) will be used.
+### Project Structure
+
+```
+cmdgpt/
+├── cmdgpt.h          # Header file with declarations
+├── cmdgpt.cpp        # Core implementation
+├── main.cpp          # CLI entry point
+├── tests/            # Test suite
+│   └── cmdgpt_tests.cpp
+├── build.sh          # Unified build script
+├── CMakeLists.txt    # CMake configuration
+├── LICENSE           # MIT License
+├── README.md         # This file
+├── CHANGELOG.md      # Version history
+└── CLAUDE.md         # AI assistant guide
+```
+
+### Code Style
+
+This project follows the Allman (BSD) coding style:
+- Opening braces on their own line
+- 4-space indentation
+- Comprehensive documentation comments
+
+### Running Tests
+
+```bash
+# Run all tests
+./build/cmdgpt_tests
+
+# Run with verbose output
+./build/cmdgpt_tests -v
+
+# Run specific test
+./build/cmdgpt_tests "Constants are defined correctly"
+```
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## Dependencies
+
+The project automatically downloads and builds these dependencies:
+- [cpp-httplib](https://github.com/yhirose/cpp-httplib) - HTTP client library
+- [nlohmann/json](https://github.com/nlohmann/json) - JSON parsing library
+- [spdlog](https://github.com/gabime/spdlog) - Fast logging library
+- [Catch2](https://github.com/catchorg/Catch2) - Testing framework
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Author
+
+**Joern Ihlenburg**
+
+## Acknowledgments
+
+- OpenAI for providing the GPT API
+- Contributors to the open-source libraries used in this project
+- The C++ community for continuous support and feedback
+
+## Support
+
+For issues, questions, or contributions, please visit the [GitHub repository](https://github.com/jihlenburg/cmdgpt).

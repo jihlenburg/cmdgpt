@@ -37,7 +37,8 @@ SOFTWARE.
 using json = nlohmann::json;
 
 // Map of string log levels to spdlog::level::level_enum values
-const std::map<std::string, spdlog::level::level_enum> log_levels = {
+const std::map<std::string, spdlog::level::level_enum> log_levels = 
+{
     {"TRACE", spdlog::level::trace},
     {"DEBUG", spdlog::level::debug},
     {"INFO", spdlog::level::info},
@@ -52,7 +53,8 @@ std::shared_ptr<spdlog::logger> gLogger;
 /**
  * @brief Prints the help message to the console.
  */
-void print_help() {
+void print_help() 
+{
     std::cout << "Usage: cmdgpt [options] [prompt]\n"
               << "Options:\n"
               << "  -h, --help              Show this help message and exit\n"
@@ -83,29 +85,35 @@ void print_help() {
  * @return The HTTP response status code, or EMPTY_RESPONSE_CODE if no response was received.
  * @throws std::invalid_argument If no API key was provided.
  */
-int get_gpt_chat_response(const std::string& prompt, std::string& response, const std::string& api_key = "", const std::string& system_prompt = "", const std::string& model = DEFAULT_MODEL) {
-    // Declare the required variables at the beginning of the function
-    json res_json;
-    std::string finish_reason;
-
+int get_gpt_chat_response(const std::string& prompt, 
+                          std::string& response, 
+                          const std::string& api_key, 
+                          const std::string& system_prompt, 
+                          const std::string& model) 
+{
     // API key and system prompt must be provided
-    if (api_key.empty() || system_prompt.empty()) {
+    if (api_key.empty() || system_prompt.empty()) 
+    {
         throw std::invalid_argument("API key and system prompt must be provided.");
     }
 
     // Setup headers for the POST request
-    httplib::Headers headers = {
+    httplib::Headers headers = 
+    {
         { AUTHORIZATION_HEADER, "Bearer " + api_key },
         { CONTENT_TYPE_HEADER, APPLICATION_JSON }
     };
 
     // Prepare the JSON data for the POST request
-    json data = {
+    json data = 
+    {
         {MODEL_KEY, model},
-        {MESSAGES_KEY, {
-            {{ROLE_KEY, SYSTEM_ROLE}, {CONTENT_KEY, system_prompt}},
-            {{ROLE_KEY, USER_ROLE}, {CONTENT_KEY, prompt}}
-        }}
+        {MESSAGES_KEY, 
+            {
+                {{ROLE_KEY, SYSTEM_ROLE}, {CONTENT_KEY, system_prompt}},
+                {{ROLE_KEY, USER_ROLE}, {CONTENT_KEY, prompt}}
+            }
+        }
     };
 
     // Initialize the HTTP client
@@ -118,60 +126,78 @@ int get_gpt_chat_response(const std::string& prompt, std::string& response, cons
     auto res = cli.Post(URL, headers, data.dump(), APPLICATION_JSON);
 
     // If response is received from the server
-    if (res) {
-        gLogger->debug("Debug: Received HTTP response with status {} and body: {}", res->status, res->body);
+    if (res) 
+    {
+        gLogger->debug("Debug: Received HTTP response with status {} and body: {}", 
+                       res->status, res->body);
+        
         // Handle the HTTP response status code
-        switch (res->status) {
+        switch (res->status) 
+        {
             case HTTP_OK:
                 // Everything is fine
                 break;
+                
             case HTTP_BAD_REQUEST:
                 gLogger->error("Error: Bad request.");
                 return res->status;
+                
             case HTTP_UNAUTHORIZED:
                 gLogger->error("Error: Unauthorized. Check your API key.");
                 return res->status;
+                
             case HTTP_FORBIDDEN:
                 gLogger->error("Error: Forbidden. You do not have the necessary permissions.");
                 return res->status;
+                
             case HTTP_NOT_FOUND:
                 gLogger->error("Error: Not Found. The requested URL was not found on the server.");
                 return res->status;
+                
             case HTTP_INTERNAL_SERVER_ERROR:
                 gLogger->error("Error: Internal Server Error. The server encountered an unexpected condition.");
                 return res->status;
+                
             default:
                 gLogger->error("Error: Received unexpected HTTP status code: {}", res->status);
                 return res->status;
         }
-    } else {
+    } 
+    else 
+    {
         gLogger->debug("Debug: No response received from the server.");
         return EMPTY_RESPONSE_CODE;
     }
 
     // If response body is not empty
-    if (!res->body.empty()) {
+    if (!res->body.empty()) 
+    {
         // Parse the JSON response
-        res_json = json::parse(res->body);
+        json res_json = json::parse(res->body);
 
         // If 'choices' array is empty
-        if (res_json[CHOICES_KEY].empty()) {
+        if (res_json[CHOICES_KEY].empty()) 
+        {
             gLogger->error("Error: '{}' array is empty.", CHOICES_KEY);
             return EMPTY_RESPONSE_CODE;
         }
+        
         // If 'finish_reason' field is missing
-        if (!res_json[CHOICES_KEY][0].contains(FINISH_REASON_KEY)) {
+        if (!res_json[CHOICES_KEY][0].contains(FINISH_REASON_KEY)) 
+        {
             gLogger->error("Error: '{}' field is missing.", FINISH_REASON_KEY);
             return EMPTY_RESPONSE_CODE;
         }
+        
         // If 'content' field is missing
-        if (!res_json[CHOICES_KEY][0]["message"].contains(CONTENT_KEY)) {
+        if (!res_json[CHOICES_KEY][0]["message"].contains(CONTENT_KEY)) 
+        {
             gLogger->error("Error: '{}' field is missing.", CONTENT_KEY);
             return EMPTY_RESPONSE_CODE;
         }
 
         // Extract 'finish_reason' and 'content'
-        finish_reason = res_json[CHOICES_KEY][0][FINISH_REASON_KEY].get<std::string>();
+        std::string finish_reason = res_json[CHOICES_KEY][0][FINISH_REASON_KEY].get<std::string>();
         gLogger->debug("Finish reason: {}", finish_reason);
         response = res_json[CHOICES_KEY][0]["message"][CONTENT_KEY].get<std::string>();
     }

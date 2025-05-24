@@ -1,0 +1,164 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+        build_type: [Debug, Release]
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libssl-dev
+        if [ "${{ matrix.compiler }}" = "clang" ]; then
+          sudo apt-get install -y clang
+        fi
+    
+    - name: Configure CMake
+      env:
+        CC: ${{ matrix.compiler == 'clang' && 'clang' || 'gcc' }}
+        CXX: ${{ matrix.compiler == 'clang' && 'clang++' || 'g++' }}
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DCMAKE_C_COMPILER=$CC \
+          -DCMAKE_CXX_COMPILER=$CXX
+    
+    - name: Build
+      run: cmake --build build --config ${{ matrix.build_type }} -j$(nproc)
+    
+    - name: Test
+      run: |
+        cd build
+        ctest -C ${{ matrix.build_type }} --output-on-failure
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: cmdgpt-linux-${{ matrix.compiler }}-${{ matrix.build_type }}
+        path: build/cmdgpt
+
+  build-macos:
+    runs-on: macos-latest
+    
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install dependencies
+      run: |
+        brew update
+        brew install cmake openssl
+    
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DOPENSSL_ROOT_DIR=$(brew --prefix openssl)
+    
+    - name: Build
+      run: cmake --build build --config ${{ matrix.build_type }} -j$(sysctl -n hw.ncpu)
+    
+    - name: Test
+      run: |
+        cd build
+        ctest -C ${{ matrix.build_type }} --output-on-failure
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: cmdgpt-macos-${{ matrix.build_type }}
+        path: build/cmdgpt
+
+  build-windows:
+    runs-on: windows-latest
+    
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
+        arch: [x64, x86]
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up OpenSSL
+      run: |
+        choco install openssl -y
+        echo "OPENSSL_ROOT_DIR=C:\Program Files\OpenSSL-Win64" >> $env:GITHUB_ENV
+    
+    - name: Configure CMake
+      run: |
+        cmake -B build `
+          -G "Visual Studio 17 2022" `
+          -A ${{ matrix.arch == 'x86' && 'Win32' || 'x64' }} `
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+    
+    - name: Build
+      run: cmake --build build --config ${{ matrix.build_type }}
+    
+    - name: Test
+      run: |
+        cd build
+        ctest -C ${{ matrix.build_type }} --output-on-failure
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: cmdgpt-windows-${{ matrix.arch }}-${{ matrix.build_type }}
+        path: build/${{ matrix.build_type }}/cmdgpt.exe
+
+  code-quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cppcheck clang-format
+    
+    - name: Run cppcheck
+      run: |
+        cppcheck --enable=all \
+                 --suppress=missingIncludeSystem \
+                 --error-exitcode=1 \
+                 --inline-suppr \
+                 cmdgpt.cpp cmdgpt.h main.cpp tests/
+    
+    - name: Check formatting
+      run: |
+        # Create .clang-format file for Allman style
+        cat > .clang-format << EOF
+        ---
+        BasedOnStyle: LLVM
+        BreakBeforeBraces: Allman
+        IndentWidth: 4
+        ColumnLimit: 100
+        PointerAlignment: Left
+        AlignAfterOpenBracket: Align
+        AllowShortFunctionsOnASingleLine: None
+        AllowShortIfStatementsOnASingleLine: Never
+        AlwaysBreakAfterReturnType: None
+        ---
+        EOF
+        
+        # Check if files are properly formatted
+        find . -name "*.cpp" -o -name "*.h" | grep -v build | while read file; do
+          clang-format --dry-run --Werror "$file"
+        done
