@@ -133,18 +133,18 @@ jobs:
     # Run static analysis with cppcheck
     - name: Run cppcheck
       run: |
-        cppcheck --enable=all \                     # Enable all checks
-                 --suppress=missingIncludeSystem \   # Don't warn about system headers (e.g., <iostream>)
-                 --suppress=unmatchedSuppression \   # Don't warn about unused suppressions
-                 --suppress=missingInclude \         # Don't warn about third-party headers
-                 --suppress=checkersReport \         # Don't show checker statistics
-                 --suppress=unusedFunction \         # Don't warn about unused functions (cross-file usage)
-                 --suppress=unknownMacro \           # Don't warn about Catch2 macros
-                 --error-exitcode=1 \                # Exit with error if issues found
-                 --inline-suppr \                    # Support inline suppressions
-                 --std=c++17 \                       # Use C++17 standard
-                 --language=c++ \                    # Force C++ mode
-                 -I. \                               # Include current directory
+        cppcheck --enable=all \
+                 --suppress=missingIncludeSystem \
+                 --suppress=unmatchedSuppression \
+                 --suppress=missingInclude \
+                 --suppress=checkersReport \
+                 --suppress=unusedFunction \
+                 --suppress=unknownMacro \
+                 --error-exitcode=1 \
+                 --inline-suppr \
+                 --std=c++17 \
+                 --language=c++ \
+                 -I. \
                  cmdgpt.cpp cmdgpt.h main.cpp tests/cmdgpt_tests.cpp
     
     # Verify code formatting matches .clang-format rules
