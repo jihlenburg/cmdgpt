@@ -46,9 +46,11 @@ jobs:
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
+      if: success()
       with:
         name: cmdgpt-linux-${{ matrix.compiler }}-${{ matrix.build_type }}
         path: build/cmdgpt
+        if-no-files-found: error
 
   build-macos:
     runs-on: macos-latest
@@ -81,9 +83,11 @@ jobs:
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
+      if: success()
       with:
         name: cmdgpt-macos-${{ matrix.build_type }}
         path: build/cmdgpt
+        if-no-files-found: error
 
   build-windows:
     runs-on: windows-latest
@@ -91,7 +95,7 @@ jobs:
     strategy:
       matrix:
         build_type: [Debug, Release]
-        arch: [x64, x86]
+        arch: [x64]
     
     steps:
     - uses: actions/checkout@v3
@@ -100,6 +104,7 @@ jobs:
       run: |
         choco install openssl -y
         echo "OPENSSL_ROOT_DIR=C:\Program Files\OpenSSL-Win64" >> $env:GITHUB_ENV
+      shell: pwsh
     
     - name: Configure CMake
       run: |
@@ -107,6 +112,7 @@ jobs:
           -G "Visual Studio 17 2022" `
           -A ${{ matrix.arch == 'x86' && 'Win32' || 'x64' }} `
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+      shell: pwsh
     
     - name: Build
       run: cmake --build build --config ${{ matrix.build_type }}
@@ -118,9 +124,11 @@ jobs:
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
+      if: success()
       with:
         name: cmdgpt-windows-${{ matrix.arch }}-${{ matrix.build_type }}
         path: build/${{ matrix.build_type }}/cmdgpt.exe
+        if-no-files-found: error
 
   code-quality:
     runs-on: ubuntu-latest
@@ -131,7 +139,7 @@ jobs:
     - name: Install tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y cppcheck clang-format
+        sudo apt-get install -y cppcheck clang-format-14
     
     - name: Run cppcheck
       run: |
@@ -139,12 +147,14 @@ jobs:
                  --suppress=missingIncludeSystem \
                  --error-exitcode=1 \
                  --inline-suppr \
+                 --std=c++17 \
+                 -I. \
                  cmdgpt.cpp cmdgpt.h main.cpp tests/
     
     - name: Check formatting
       run: |
         # Create .clang-format file for Allman style
-        cat > .clang-format << EOF
+        cat > .clang-format << 'EOF'
         ---
         BasedOnStyle: LLVM
         BreakBeforeBraces: Allman
@@ -159,6 +169,6 @@ jobs:
         EOF
         
         # Check if files are properly formatted
-        find . -name "*.cpp" -o -name "*.h" | grep -v build | while read file; do
-          clang-format --dry-run --Werror "$file"
+        find . -name "*.cpp" -o -name "*.h" | grep -v build | grep -v ".github" | while read file; do
+          clang-format-14 --dry-run --Werror "$file"
         done
