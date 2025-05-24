@@ -35,6 +35,7 @@ SOFTWARE.
 #include <string>
 
 using json = nlohmann::json;
+using namespace cmdgpt;
 
 // Map of string log levels to spdlog::level::level_enum values
 const std::map<std::string, spdlog::level::level_enum> log_levels = {
@@ -49,7 +50,7 @@ std::shared_ptr<spdlog::logger> gLogger;
 /**
  * @brief Prints the help message to the console.
  */
-void print_help()
+void cmdgpt::print_help()
 {
     std::cout << "Usage: cmdgpt [options] [prompt]\n"
               << "Options:\n"
@@ -73,121 +74,141 @@ void print_help()
 }
 
 /**
- * @brief Sends a message to the GPT Chat API and returns the HTTP response status code.
- * @param prompt The text prompt to send to the API.
- * @param response A reference to a string where the API response will be stored.
- * @param api_key The API key for the OpenAI GPT API. Default is an empty string.
- * @param system_prompt The system prompt for the OpenAI GPT API. Default is an empty string.
- * @param model The GPT model to use. Default is DEFAULT_MODEL.
- * @return The HTTP response status code, or EMPTY_RESPONSE_CODE if no response was received.
- * @throws std::invalid_argument If no API key was provided.
+ * @brief Sends a chat completion request to the OpenAI API
+ *
+ * @param prompt The user's input prompt
+ * @param api_key OpenAI API key (empty string uses environment variable)
+ * @param system_prompt System prompt to set context (empty string uses default)
+ * @param model The model to use (empty string uses default)
+ * @return The API response text
+ * @throws ApiException on HTTP errors
+ * @throws NetworkException on network/connection errors
+ * @throws ConfigurationException on invalid configuration
  */
-int get_gpt_chat_response(const std::string& prompt, std::string& response,
-                          const std::string& api_key, const std::string& system_prompt,
-                          const std::string& model)
+std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, std::string_view api_key,
+                                          std::string_view system_prompt, std::string_view model)
 {
-    // API key and system prompt must be provided
-    if (api_key.empty() || system_prompt.empty())
+    // Use environment variable if API key not provided
+    std::string actual_api_key{api_key};
+    if (actual_api_key.empty())
     {
-        throw std::invalid_argument("API key and system prompt must be provided.");
+        const char* env_key = std::getenv("OPENAI_API_KEY");
+        if (!env_key)
+        {
+            throw ConfigurationException(
+                "API key must be provided via parameter or OPENAI_API_KEY environment variable");
+        }
+        actual_api_key = env_key;
+    }
+
+    // Use default values if not provided
+    std::string actual_system_prompt{system_prompt.empty() ? DEFAULT_SYSTEM_PROMPT : system_prompt};
+    std::string actual_model{model.empty() ? DEFAULT_MODEL : model};
+
+    // Validate inputs
+    if (prompt.empty())
+    {
+        throw ConfigurationException("Prompt cannot be empty");
     }
 
     // Setup headers for the POST request
-    httplib::Headers headers = {{AUTHORIZATION_HEADER, "Bearer " + api_key},
-                                {CONTENT_TYPE_HEADER, APPLICATION_JSON}};
+    httplib::Headers headers = {{std::string(AUTHORIZATION_HEADER), "Bearer " + actual_api_key},
+                                {std::string(CONTENT_TYPE_HEADER), std::string(APPLICATION_JSON)}};
 
     // Prepare the JSON data for the POST request
-    json data = {{MODEL_KEY, model},
-                 {MESSAGES_KEY,
-                  {{{ROLE_KEY, SYSTEM_ROLE}, {CONTENT_KEY, system_prompt}},
-                   {{ROLE_KEY, USER_ROLE}, {CONTENT_KEY, prompt}}}}};
+    json data = {{std::string(MODEL_KEY), actual_model},
+                 {std::string(MESSAGES_KEY),
+                  {{{std::string(ROLE_KEY), std::string(SYSTEM_ROLE)},
+                    {std::string(CONTENT_KEY), actual_system_prompt}},
+                   {{std::string(ROLE_KEY), std::string(USER_ROLE)},
+                    {std::string(CONTENT_KEY), std::string(prompt)}}}}};
 
     // Initialize the HTTP client
-    httplib::Client cli(SERVER_URL);
+    httplib::Client cli{std::string(SERVER_URL)};
+
+    // Set connection timeout
+    cli.set_connection_timeout(30, 0); // 30 seconds
+    cli.set_read_timeout(60, 0);       // 60 seconds
 
     // Log the data being sent
-    gLogger->debug("Debug: Sending POST request to {} with data: {}", URL, data.dump());
+    gLogger->debug("Debug: Sending POST request to {} with data: {}", API_URL, data.dump());
 
     // Send the POST request
-    auto res = cli.Post(URL, headers, data.dump(), APPLICATION_JSON);
+    auto res = cli.Post(std::string(API_URL), headers, data.dump(), std::string(APPLICATION_JSON));
 
-    // If response is received from the server
-    if (res)
+    // Check if response was received
+    if (!res)
     {
-        gLogger->debug("Debug: Received HTTP response with status {} and body: {}", res->status,
-                       res->body);
-
-        // Handle the HTTP response status code
-        switch (res->status)
-        {
-        case HTTP_OK:
-            // Everything is fine
-            break;
-
-        case HTTP_BAD_REQUEST:
-            gLogger->error("Error: Bad request.");
-            return res->status;
-
-        case HTTP_UNAUTHORIZED:
-            gLogger->error("Error: Unauthorized. Check your API key.");
-            return res->status;
-
-        case HTTP_FORBIDDEN:
-            gLogger->error("Error: Forbidden. You do not have the necessary permissions.");
-            return res->status;
-
-        case HTTP_NOT_FOUND:
-            gLogger->error("Error: Not Found. The requested URL was not found on the server.");
-            return res->status;
-
-        case HTTP_INTERNAL_SERVER_ERROR:
-            gLogger->error(
-                "Error: Internal Server Error. The server encountered an unexpected condition.");
-            return res->status;
-
-        default:
-            gLogger->error("Error: Received unexpected HTTP status code: {}", res->status);
-            return res->status;
-        }
-    }
-    else
-    {
-        gLogger->debug("Debug: No response received from the server.");
-        return EMPTY_RESPONSE_CODE;
+        throw NetworkException("Failed to connect to OpenAI API - check network connection");
     }
 
-    // If response body is not empty
-    if (!res->body.empty())
+    gLogger->debug("Debug: Received HTTP response with status {} and body: {}", res->status,
+                   res->body);
+
+    // Handle HTTP response status codes
+    const auto status = static_cast<HttpStatus>(res->status);
+    switch (status)
     {
-        // Parse the JSON response
-        json res_json = json::parse(res->body);
-
-        // If 'choices' array is empty
-        if (res_json[CHOICES_KEY].empty())
-        {
-            gLogger->error("Error: '{}' array is empty.", CHOICES_KEY);
-            return EMPTY_RESPONSE_CODE;
-        }
-
-        // If 'finish_reason' field is missing
-        if (!res_json[CHOICES_KEY][0].contains(FINISH_REASON_KEY))
-        {
-            gLogger->error("Error: '{}' field is missing.", FINISH_REASON_KEY);
-            return EMPTY_RESPONSE_CODE;
-        }
-
-        // If 'content' field is missing
-        if (!res_json[CHOICES_KEY][0]["message"].contains(CONTENT_KEY))
-        {
-            gLogger->error("Error: '{}' field is missing.", CONTENT_KEY);
-            return EMPTY_RESPONSE_CODE;
-        }
-
-        // Extract 'finish_reason' and 'content'
-        std::string finish_reason = res_json[CHOICES_KEY][0][FINISH_REASON_KEY].get<std::string>();
-        gLogger->debug("Finish reason: {}", finish_reason);
-        response = res_json[CHOICES_KEY][0]["message"][CONTENT_KEY].get<std::string>();
+    case HttpStatus::OK:
+        // Success - continue processing
+        break;
+    case HttpStatus::BAD_REQUEST:
+        throw ApiException(status, "Bad request - check your input parameters");
+    case HttpStatus::UNAUTHORIZED:
+        throw ApiException(status, "Unauthorized - check your API key");
+    case HttpStatus::FORBIDDEN:
+        throw ApiException(status, "Forbidden - insufficient permissions");
+    case HttpStatus::NOT_FOUND:
+        throw ApiException(status, "API endpoint not found");
+    case HttpStatus::INTERNAL_SERVER_ERROR:
+        throw ApiException(status, "OpenAI server error - try again later");
+    default:
+        throw ApiException(status, "Unexpected HTTP status code: " + std::to_string(res->status));
     }
 
-    return res->status;
+    // Parse and validate response body
+    if (res->body.empty())
+    {
+        throw ApiException(HttpStatus::EMPTY_RESPONSE, "Received empty response from API");
+    }
+
+    json res_json;
+    try
+    {
+        res_json = json::parse(res->body);
+    }
+    catch (const json::parse_error& e)
+    {
+        throw ApiException(HttpStatus::EMPTY_RESPONSE,
+                           "Invalid JSON response: " + std::string(e.what()));
+    }
+
+    // Validate response structure
+    const std::string choices_key{CHOICES_KEY};
+    const std::string content_key{CONTENT_KEY};
+    const std::string finish_reason_key{FINISH_REASON_KEY};
+
+    if (!res_json.contains(choices_key) || res_json[choices_key].empty())
+    {
+        throw ApiException(HttpStatus::EMPTY_RESPONSE,
+                           "API response missing or empty 'choices' array");
+    }
+
+    const auto& first_choice = res_json[choices_key][0];
+    if (!first_choice.contains(finish_reason_key))
+    {
+        throw ApiException(HttpStatus::EMPTY_RESPONSE,
+                           "API response missing 'finish_reason' field");
+    }
+
+    if (!first_choice.contains("message") || !first_choice["message"].contains(content_key))
+    {
+        throw ApiException(HttpStatus::EMPTY_RESPONSE, "API response missing message content");
+    }
+
+    // Extract and return the response
+    std::string finish_reason = first_choice[finish_reason_key].get<std::string>();
+    gLogger->debug("Finish reason: {}", finish_reason);
+
+    return first_choice["message"][content_key].get<std::string>();
 }

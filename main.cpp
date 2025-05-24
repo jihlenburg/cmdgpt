@@ -48,8 +48,8 @@ int main(int argc, const char* const argv[])
     // Parse environment variables
     api_key = getenv("OPENAI_API_KEY") ? getenv("OPENAI_API_KEY") : "";
     system_prompt =
-        getenv("OPENAI_SYS_PROMPT") ? getenv("OPENAI_SYS_PROMPT") : DEFAULT_SYSTEM_PROMPT;
-    gpt_model = getenv("OPENAI_GPT_MODEL") ? getenv("OPENAI_GPT_MODEL") : DEFAULT_MODEL;
+        getenv("OPENAI_SYS_PROMPT") ? getenv("OPENAI_SYS_PROMPT") : cmdgpt::DEFAULT_SYSTEM_PROMPT;
+    gpt_model = getenv("OPENAI_GPT_MODEL") ? getenv("OPENAI_GPT_MODEL") : cmdgpt::DEFAULT_MODEL;
     log_file = getenv("CMDGPT_LOG_FILE") ? getenv("CMDGPT_LOG_FILE") : "logfile.txt";
 
     std::string env_log_level = getenv("CMDGPT_LOG_LEVEL") ? getenv("CMDGPT_LOG_LEVEL") : "WARN";
@@ -60,7 +60,8 @@ int main(int argc, const char* const argv[])
         {"ERROR", spdlog::level::err},   {"CRITICAL", spdlog::level::critical},
     };
 
-    log_level = log_levels.count(env_log_level) ? log_levels.at(env_log_level) : DEFAULT_LOG_LEVEL;
+    log_level =
+        log_levels.count(env_log_level) ? log_levels.at(env_log_level) : cmdgpt::DEFAULT_LOG_LEVEL;
 
     // Parsing command-line arguments
     for (int i = 1; i < argc; ++i)
@@ -69,12 +70,12 @@ int main(int argc, const char* const argv[])
 
         if (arg == "-h" || arg == "--help")
         {
-            print_help();
+            cmdgpt::print_help();
             return EXIT_SUCCESS;
         }
         else if (arg == "-v" || arg == "--version")
         {
-            std::cout << "cmdgpt version: " << CMDGPT_VERSION << std::endl;
+            std::cout << "cmdgpt version: " << cmdgpt::VERSION << std::endl;
             return EXIT_SUCCESS;
         }
         else if (arg == "-k" || arg == "--api_key")
@@ -134,7 +135,7 @@ int main(int argc, const char* const argv[])
         else if (arg.substr(0, 1) == "-")
         {
             std::cerr << "Error: Unknown argument: " << arg << std::endl;
-            print_help();
+            cmdgpt::print_help();
             return EX_USAGE;
         }
         else
@@ -179,27 +180,29 @@ int main(int argc, const char* const argv[])
     // Make the API request and handle the response
     try
     {
-        std::string response;
-        int status_code =
-            get_gpt_chat_response(prompt, response, api_key, system_prompt, gpt_model);
-
-        if (status_code == EMPTY_RESPONSE_CODE)
-        {
-            gLogger->critical("Error: Did not receive a response from the server.");
-            return EX_TEMPFAIL;
-        }
-        else if (status_code != HTTP_OK)
-        {
-            gLogger->critical("Error: HTTP request failed with status code: {}", status_code);
-            return EX_TEMPFAIL;
-        }
-
+        std::string response =
+            cmdgpt::get_gpt_chat_response(prompt, api_key, system_prompt, gpt_model);
         std::cout << response << std::endl;
         return EXIT_SUCCESS;
     }
+    catch (const cmdgpt::ConfigurationException& e)
+    {
+        gLogger->critical("Configuration Error: {}", e.what());
+        return EX_CONFIG;
+    }
+    catch (const cmdgpt::ApiException& e)
+    {
+        gLogger->critical("API Error: {}", e.what());
+        return EX_TEMPFAIL;
+    }
+    catch (const cmdgpt::NetworkException& e)
+    {
+        gLogger->critical("Network Error: {}", e.what());
+        return EX_TEMPFAIL;
+    }
     catch (const std::exception& e)
     {
-        gLogger->critical("Error: {}", e.what());
+        gLogger->critical("Unexpected Error: {}", e.what());
         return EXIT_FAILURE;
     }
 }

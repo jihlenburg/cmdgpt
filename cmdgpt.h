@@ -28,46 +28,98 @@ SOFTWARE.
 #include "spdlog/spdlog.h"
 #include <map>
 #include <memory>
+#include <stdexcept>
 #include <string>
+#include <string_view>
+
+// Forward declarations
+namespace cmdgpt
+{
 
 // Version information
-#define CMDGPT_VERSION "v0.2"
+inline constexpr std::string_view VERSION = "v0.2";
 
 // Model and prompt defaults
-#define DEFAULT_MODEL "gpt-4"
-#define DEFAULT_SYSTEM_PROMPT "You are a helpful assistant!"
-#define DEFAULT_LOG_LEVEL spdlog::level::warn
+inline constexpr std::string_view DEFAULT_MODEL = "gpt-4";
+inline constexpr std::string_view DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant!";
+inline constexpr spdlog::level::level_enum DEFAULT_LOG_LEVEL = spdlog::level::warn;
 
 // HTTP headers
-#define AUTHORIZATION_HEADER "Authorization"
-#define CONTENT_TYPE_HEADER "Content-Type"
-#define APPLICATION_JSON "application/json"
+inline constexpr std::string_view AUTHORIZATION_HEADER = "Authorization";
+inline constexpr std::string_view CONTENT_TYPE_HEADER = "Content-Type";
+inline constexpr std::string_view APPLICATION_JSON = "application/json";
 
 // JSON keys for OpenAI API
-#define SYSTEM_ROLE "system"
-#define USER_ROLE "user"
-#define MODEL_KEY "model"
-#define MESSAGES_KEY "messages"
-#define ROLE_KEY "role"
-#define CONTENT_KEY "content"
-#define CHOICES_KEY "choices"
-#define FINISH_REASON_KEY "finish_reason"
+inline constexpr std::string_view SYSTEM_ROLE = "system";
+inline constexpr std::string_view USER_ROLE = "user";
+inline constexpr std::string_view MODEL_KEY = "model";
+inline constexpr std::string_view MESSAGES_KEY = "messages";
+inline constexpr std::string_view ROLE_KEY = "role";
+inline constexpr std::string_view CONTENT_KEY = "content";
+inline constexpr std::string_view CHOICES_KEY = "choices";
+inline constexpr std::string_view FINISH_REASON_KEY = "finish_reason";
 
 // API configuration
-#define URL "/v1/chat/completions"
-#define SERVER_URL "https://api.openai.com"
+inline constexpr std::string_view API_URL = "/v1/chat/completions";
+inline constexpr std::string_view SERVER_URL = "https://api.openai.com";
 
 // HTTP status codes
-#define EMPTY_RESPONSE_CODE -1
-#define HTTP_OK 200
-#define HTTP_BAD_REQUEST 400
-#define HTTP_UNAUTHORIZED 401
-#define HTTP_FORBIDDEN 403
-#define HTTP_NOT_FOUND 404
-#define HTTP_INTERNAL_SERVER_ERROR 500
+enum class HttpStatus : int
+{
+    EMPTY_RESPONSE = -1,
+    OK = 200,
+    BAD_REQUEST = 400,
+    UNAUTHORIZED = 401,
+    FORBIDDEN = 403,
+    NOT_FOUND = 404,
+    INTERNAL_SERVER_ERROR = 500
+};
 
-// Global logger instance
-extern std::shared_ptr<spdlog::logger> gLogger;
+// Custom exception classes for better error handling
+class CmdGptException : public std::runtime_error
+{
+  public:
+    explicit CmdGptException(const std::string& message) : std::runtime_error(message)
+    {
+    }
+};
+
+class ApiException : public CmdGptException
+{
+  public:
+    ApiException(HttpStatus status, const std::string& message)
+        : CmdGptException("API Error [" + std::to_string(static_cast<int>(status)) +
+                          "]: " + message),
+          status_code_(status)
+    {
+    }
+
+    HttpStatus status_code() const noexcept
+    {
+        return status_code_;
+    }
+
+  private:
+    HttpStatus status_code_;
+};
+
+class NetworkException : public CmdGptException
+{
+  public:
+    explicit NetworkException(const std::string& message)
+        : CmdGptException("Network Error: " + message)
+    {
+    }
+};
+
+class ConfigurationException : public CmdGptException
+{
+  public:
+    explicit ConfigurationException(const std::string& message)
+        : CmdGptException("Configuration Error: " + message)
+    {
+    }
+};
 
 /**
  * @brief Prints the help message to the console
@@ -78,15 +130,20 @@ void print_help();
  * @brief Sends a chat completion request to the OpenAI API
  *
  * @param prompt The user's input prompt
- * @param response Output parameter for the API response
- * @param api_key OpenAI API key (optional if set via environment)
- * @param system_prompt System prompt to set context (optional)
- * @param model The model to use (default: gpt-4)
- * @return HTTP status code or EMPTY_RESPONSE_CODE on failure
+ * @param api_key OpenAI API key (empty string uses environment variable)
+ * @param system_prompt System prompt to set context (empty string uses default)
+ * @param model The model to use (empty string uses default)
+ * @return The API response text
+ * @throws ApiException on HTTP errors
+ * @throws NetworkException on network/connection errors
+ * @throws ConfigurationException on invalid configuration
  */
-// cppcheck-suppress syntaxError
-int get_gpt_chat_response(const std::string& prompt, std::string& response,
-                          const std::string& api_key = "", const std::string& system_prompt = "",
-                          const std::string& model = DEFAULT_MODEL);
+std::string get_gpt_chat_response(std::string_view prompt, std::string_view api_key = "",
+                                  std::string_view system_prompt = "", std::string_view model = "");
+
+} // namespace cmdgpt
+
+// Global logger instance
+extern std::shared_ptr<spdlog::logger> gLogger;
 
 #endif // CMDGPT_H

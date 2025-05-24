@@ -42,66 +42,74 @@ struct LoggerFixture
 
 TEST_CASE_METHOD(LoggerFixture, "Constants are defined correctly")
 {
-    SECTION("Model defaults")
+    SECTION("Version and model defaults")
     {
-        REQUIRE(std::string(DEFAULT_MODEL) == "gpt-4");
-        REQUIRE(std::string(DEFAULT_SYSTEM_PROMPT) == "You are a helpful assistant!");
+        REQUIRE(std::string(cmdgpt::VERSION) == "v0.2");
+        REQUIRE(std::string(cmdgpt::DEFAULT_MODEL) == "gpt-4");
+        REQUIRE(std::string(cmdgpt::DEFAULT_SYSTEM_PROMPT) == "You are a helpful assistant!");
+        REQUIRE(cmdgpt::DEFAULT_LOG_LEVEL == spdlog::level::warn);
     }
 
     SECTION("HTTP status codes")
     {
-        REQUIRE(HTTP_OK == 200);
-        REQUIRE(HTTP_BAD_REQUEST == 400);
-        REQUIRE(HTTP_UNAUTHORIZED == 401);
-        REQUIRE(HTTP_FORBIDDEN == 403);
-        REQUIRE(HTTP_NOT_FOUND == 404);
-        REQUIRE(HTTP_INTERNAL_SERVER_ERROR == 500);
-        REQUIRE(EMPTY_RESPONSE_CODE == -1);
+        REQUIRE(static_cast<int>(cmdgpt::HttpStatus::OK) == 200);
+        REQUIRE(static_cast<int>(cmdgpt::HttpStatus::BAD_REQUEST) == 400);
+        REQUIRE(static_cast<int>(cmdgpt::HttpStatus::UNAUTHORIZED) == 401);
+        REQUIRE(static_cast<int>(cmdgpt::HttpStatus::FORBIDDEN) == 403);
+        REQUIRE(static_cast<int>(cmdgpt::HttpStatus::NOT_FOUND) == 404);
+        REQUIRE(static_cast<int>(cmdgpt::HttpStatus::INTERNAL_SERVER_ERROR) == 500);
+        REQUIRE(static_cast<int>(cmdgpt::HttpStatus::EMPTY_RESPONSE) == -1);
     }
 
     SECTION("API configuration")
     {
-        REQUIRE(std::string(SERVER_URL) == "https://api.openai.com");
-        REQUIRE(std::string(URL) == "/v1/chat/completions");
+        REQUIRE(std::string(cmdgpt::SERVER_URL) == "https://api.openai.com");
+        REQUIRE(std::string(cmdgpt::API_URL) == "/v1/chat/completions");
     }
 
     SECTION("JSON keys")
     {
-        REQUIRE(std::string(MODEL_KEY) == "model");
-        REQUIRE(std::string(MESSAGES_KEY) == "messages");
-        REQUIRE(std::string(ROLE_KEY) == "role");
-        REQUIRE(std::string(CONTENT_KEY) == "content");
-        REQUIRE(std::string(CHOICES_KEY) == "choices");
-        REQUIRE(std::string(FINISH_REASON_KEY) == "finish_reason");
+        REQUIRE(std::string(cmdgpt::MODEL_KEY) == "model");
+        REQUIRE(std::string(cmdgpt::MESSAGES_KEY) == "messages");
+        REQUIRE(std::string(cmdgpt::ROLE_KEY) == "role");
+        REQUIRE(std::string(cmdgpt::CONTENT_KEY) == "content");
+        REQUIRE(std::string(cmdgpt::CHOICES_KEY) == "choices");
+        REQUIRE(std::string(cmdgpt::FINISH_REASON_KEY) == "finish_reason");
     }
 }
 
 TEST_CASE_METHOD(LoggerFixture, "API key validation")
 {
-    std::string response;
-
-    SECTION("Throws when API key is empty")
+    SECTION("Throws ConfigurationException when API key is empty and no environment variable")
     {
-        REQUIRE_THROWS_AS(get_gpt_chat_response("test prompt", response, "", "system prompt"),
-                          std::invalid_argument);
+        // Ensure OPENAI_API_KEY is not set for this test
+        unsetenv("OPENAI_API_KEY");
+        REQUIRE_THROWS_AS(cmdgpt::get_gpt_chat_response("test prompt", "", "system prompt"),
+                          cmdgpt::ConfigurationException);
     }
 
-    SECTION("Throws when system prompt is empty")
+    SECTION("Throws ConfigurationException when prompt is empty")
     {
-        REQUIRE_THROWS_AS(get_gpt_chat_response("test prompt", response, "api_key", ""),
-                          std::invalid_argument);
+        REQUIRE_THROWS_AS(cmdgpt::get_gpt_chat_response("", "api_key", "system prompt"),
+                          cmdgpt::ConfigurationException);
     }
 
-    SECTION("Throws when both are empty")
+    SECTION("Uses default system prompt when empty")
     {
-        REQUIRE_THROWS_AS(get_gpt_chat_response("test prompt", response, "", ""),
-                          std::invalid_argument);
+        // This test would require mocking the HTTP client or using a test API
+        // For now, we just ensure it doesn't throw a ConfigurationException
+        // (it will throw ApiException when server responds with 401 for invalid API key)
+        REQUIRE_THROWS_AS(cmdgpt::get_gpt_chat_response("test prompt", "fake_api_key", ""),
+                          cmdgpt::ApiException);
     }
 
-    SECTION("Exception message is descriptive")
+    SECTION("Exception messages are descriptive")
     {
-        REQUIRE_THROWS_WITH(
-            get_gpt_chat_response("test prompt", response, "", ""),
-            Catch::Matchers::ContainsSubstring("API key and system prompt must be provided."));
+        unsetenv("OPENAI_API_KEY");
+        REQUIRE_THROWS_WITH(cmdgpt::get_gpt_chat_response("test prompt", "", ""),
+                            Catch::Matchers::ContainsSubstring("API key must be provided"));
+
+        REQUIRE_THROWS_WITH(cmdgpt::get_gpt_chat_response("", "api_key", "system prompt"),
+                            Catch::Matchers::ContainsSubstring("Prompt cannot be empty"));
     }
 }
