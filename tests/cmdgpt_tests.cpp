@@ -88,10 +88,10 @@ TEST_CASE_METHOD(LoggerFixture, "API key validation")
                           cmdgpt::ConfigurationException);
     }
 
-    SECTION("Throws ConfigurationException when prompt is empty")
+    SECTION("Throws ValidationException when prompt is empty")
     {
         REQUIRE_THROWS_AS(cmdgpt::get_gpt_chat_response("", "api_key", "system prompt"),
-                          cmdgpt::ConfigurationException);
+                          cmdgpt::ValidationException);
     }
 
     SECTION("Uses default system prompt when empty")
@@ -111,5 +111,86 @@ TEST_CASE_METHOD(LoggerFixture, "API key validation")
 
         REQUIRE_THROWS_WITH(cmdgpt::get_gpt_chat_response("", "api_key", "system prompt"),
                             Catch::Matchers::ContainsSubstring("Prompt cannot be empty"));
+    }
+}
+
+TEST_CASE_METHOD(LoggerFixture, "Security Validation", "[security]")
+{
+    SECTION("API key validation rejects invalid characters")
+    {
+        REQUIRE_THROWS_AS(cmdgpt::validate_api_key("invalid\x01key"), cmdgpt::ValidationException);
+        REQUIRE_THROWS_AS(cmdgpt::validate_api_key("invalid\x7Fkey"), cmdgpt::ValidationException);
+    }
+
+    SECTION("API key validation rejects empty keys")
+    {
+        REQUIRE_THROWS_AS(cmdgpt::validate_api_key(""), cmdgpt::ValidationException);
+    }
+
+    SECTION("API key validation rejects overly long keys")
+    {
+        std::string long_key(300, 'a'); // Longer than MAX_API_KEY_LENGTH
+        REQUIRE_THROWS_AS(cmdgpt::validate_api_key(long_key), cmdgpt::ValidationException);
+    }
+
+    SECTION("API key validation accepts valid keys")
+    {
+        REQUIRE_NOTHROW(cmdgpt::validate_api_key("sk-valid123API456key789"));
+    }
+
+    SECTION("Prompt validation rejects empty prompts")
+    {
+        REQUIRE_THROWS_AS(cmdgpt::validate_prompt(""), cmdgpt::ValidationException);
+    }
+
+    SECTION("Prompt validation rejects overly long prompts")
+    {
+        std::string long_prompt(2000000, 'a'); // Longer than MAX_PROMPT_LENGTH
+        REQUIRE_THROWS_AS(cmdgpt::validate_prompt(long_prompt), cmdgpt::ValidationException);
+    }
+
+    SECTION("API key redaction works correctly")
+    {
+        REQUIRE(cmdgpt::redact_api_key("") == "[EMPTY]");
+        REQUIRE(cmdgpt::redact_api_key("short") == "*****");
+        REQUIRE(cmdgpt::redact_api_key("sk-1234567890abcdef") == "sk-1***********cdef");
+    }
+}
+
+TEST_CASE_METHOD(LoggerFixture, "Configuration Management", "[config]")
+{
+    SECTION("Config loads defaults correctly")
+    {
+        cmdgpt::Config config;
+        REQUIRE(config.system_prompt() == cmdgpt::DEFAULT_SYSTEM_PROMPT);
+        REQUIRE(config.model() == cmdgpt::DEFAULT_MODEL);
+        REQUIRE(config.log_level() == cmdgpt::DEFAULT_LOG_LEVEL);
+    }
+
+    SECTION("Config validates API key on set")
+    {
+        cmdgpt::Config config;
+        REQUIRE_THROWS_AS(config.set_api_key("invalid\x01key"), cmdgpt::ValidationException);
+    }
+
+    SECTION("Config validates system prompt length")
+    {
+        cmdgpt::Config config;
+        std::string long_prompt(2000000, 'a');
+        REQUIRE_THROWS_AS(config.set_system_prompt(long_prompt), cmdgpt::ValidationException);
+    }
+
+    SECTION("Config validates model name")
+    {
+        cmdgpt::Config config;
+        std::string long_model(200, 'a');
+        REQUIRE_THROWS_AS(config.set_model(long_model), cmdgpt::ValidationException);
+    }
+
+    SECTION("Config validates log file path")
+    {
+        cmdgpt::Config config;
+        std::string long_path(5000, 'a');
+        REQUIRE_THROWS_AS(config.set_log_file(long_path), cmdgpt::ValidationException);
     }
 }

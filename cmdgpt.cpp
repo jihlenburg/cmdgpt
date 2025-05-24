@@ -74,6 +74,178 @@ void cmdgpt::print_help()
 }
 
 /**
+ * @brief Validates and sanitizes API key input
+ */
+void cmdgpt::validate_api_key(std::string_view api_key)
+{
+    if (api_key.empty())
+    {
+        throw ValidationException("API key cannot be empty");
+    }
+
+    if (api_key.length() > MAX_API_KEY_LENGTH)
+    {
+        throw ValidationException("API key exceeds maximum allowed length");
+    }
+
+    // Check for potentially dangerous characters
+    for (char c : api_key)
+    {
+        if (c < 32 || c > 126) // Only allow printable ASCII
+        {
+            throw ValidationException("API key contains invalid characters");
+        }
+    }
+}
+
+/**
+ * @brief Validates input prompt length and content
+ */
+void cmdgpt::validate_prompt(std::string_view prompt)
+{
+    if (prompt.empty())
+    {
+        throw ValidationException("Prompt cannot be empty");
+    }
+
+    if (prompt.length() > MAX_PROMPT_LENGTH)
+    {
+        throw ValidationException("Prompt exceeds maximum allowed length of " +
+                                  std::to_string(MAX_PROMPT_LENGTH) + " characters");
+    }
+}
+
+/**
+ * @brief Returns a redacted version of API key for logging
+ */
+std::string cmdgpt::redact_api_key(std::string_view api_key)
+{
+    if (api_key.empty())
+    {
+        return "[EMPTY]";
+    }
+
+    if (api_key.length() <= 8)
+    {
+        return std::string(api_key.length(), '*');
+    }
+
+    // Show first 4 and last 4 characters, redact the middle
+    std::string result;
+    result += api_key.substr(0, 4);
+    result += std::string(api_key.length() - 8, '*');
+    result += api_key.substr(api_key.length() - 4);
+    return result;
+}
+
+/**
+ * @brief Config class implementation
+ */
+void cmdgpt::Config::set_api_key(std::string_view key)
+{
+    validate_api_key(key);
+    api_key_ = key;
+}
+
+void cmdgpt::Config::set_system_prompt(std::string_view prompt)
+{
+    if (prompt.length() > MAX_PROMPT_LENGTH)
+    {
+        throw ValidationException("System prompt exceeds maximum allowed length");
+    }
+    system_prompt_ = prompt.empty() ? std::string{DEFAULT_SYSTEM_PROMPT} : std::string{prompt};
+}
+
+void cmdgpt::Config::set_model(std::string_view model)
+{
+    if (model.empty() || model.length() > 100)
+    {
+        throw ValidationException("Invalid model name");
+    }
+    model_ = model.empty() ? std::string{DEFAULT_MODEL} : std::string{model};
+}
+
+void cmdgpt::Config::set_log_file(std::string_view file)
+{
+    if (file.empty() || file.length() > 4096)
+    {
+        throw ValidationException("Invalid log file path");
+    }
+    log_file_ = file;
+}
+
+void cmdgpt::Config::set_log_level(spdlog::level::level_enum level)
+{
+    log_level_ = level;
+}
+
+void cmdgpt::Config::load_from_environment()
+{
+    // Load API key from environment if available
+    if (const char* env_key = std::getenv("OPENAI_API_KEY"))
+    {
+        api_key_ = env_key;
+    }
+
+    // Load system prompt from environment if available
+    if (const char* env_prompt = std::getenv("OPENAI_SYS_PROMPT"))
+    {
+        system_prompt_ = env_prompt;
+    }
+
+    // Load model from environment if available
+    if (const char* env_model = std::getenv("OPENAI_GPT_MODEL"))
+    {
+        model_ = env_model;
+    }
+
+    // Load log file from environment if available
+    if (const char* env_log_file = std::getenv("CMDGPT_LOG_FILE"))
+    {
+        log_file_ = env_log_file;
+    }
+
+    // Load log level from environment if available
+    if (const char* env_log_level = std::getenv("CMDGPT_LOG_LEVEL"))
+    {
+        static const std::map<std::string, spdlog::level::level_enum> log_levels = {
+            {"TRACE", spdlog::level::trace}, {"DEBUG", spdlog::level::debug},
+            {"INFO", spdlog::level::info},   {"WARN", spdlog::level::warn},
+            {"ERROR", spdlog::level::err},   {"CRITICAL", spdlog::level::critical},
+        };
+
+        const auto it = log_levels.find(env_log_level);
+        if (it != log_levels.end())
+        {
+            log_level_ = it->second;
+        }
+    }
+}
+
+void cmdgpt::Config::validate() const
+{
+    if (!api_key_.empty())
+    {
+        validate_api_key(api_key_);
+    }
+
+    if (system_prompt_.length() > MAX_PROMPT_LENGTH)
+    {
+        throw ValidationException("System prompt exceeds maximum allowed length");
+    }
+
+    if (model_.empty() || model_.length() > 100)
+    {
+        throw ValidationException("Invalid model configuration");
+    }
+
+    if (log_file_.empty() || log_file_.length() > 4096)
+    {
+        throw ValidationException("Invalid log file configuration");
+    }
+}
+
+/**
  * @brief Sends a chat completion request to the OpenAI API
  *
  * @param prompt The user's input prompt
@@ -88,6 +260,9 @@ void cmdgpt::print_help()
 std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, std::string_view api_key,
                                           std::string_view system_prompt, std::string_view model)
 {
+    // Validate input prompt first
+    validate_prompt(prompt);
+
     // Use environment variable if API key not provided
     std::string actual_api_key{api_key};
     if (actual_api_key.empty())
@@ -101,14 +276,20 @@ std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, std::string_v
         actual_api_key = env_key;
     }
 
+    // Validate API key
+    validate_api_key(actual_api_key);
+
     // Use default values if not provided
     std::string actual_system_prompt{system_prompt.empty() ? DEFAULT_SYSTEM_PROMPT : system_prompt};
     std::string actual_model{model.empty() ? DEFAULT_MODEL : model};
 
-    // Validate inputs
-    if (prompt.empty())
+    // Validate system prompt if provided
+    if (!system_prompt.empty())
     {
-        throw ConfigurationException("Prompt cannot be empty");
+        if (system_prompt.length() > MAX_PROMPT_LENGTH)
+        {
+            throw ValidationException("System prompt exceeds maximum allowed length");
+        }
     }
 
     // Setup headers for the POST request
@@ -123,15 +304,19 @@ std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, std::string_v
                    {{std::string(ROLE_KEY), std::string(USER_ROLE)},
                     {std::string(CONTENT_KEY), std::string(prompt)}}}}};
 
-    // Initialize the HTTP client
+    // Initialize the HTTP client with security settings
     httplib::Client cli{std::string(SERVER_URL)};
 
-    // Set connection timeout
-    cli.set_connection_timeout(30, 0); // 30 seconds
-    cli.set_read_timeout(60, 0);       // 60 seconds
+    // Set connection and read timeouts using security constants
+    cli.set_connection_timeout(CONNECTION_TIMEOUT_SECONDS, 0);
+    cli.set_read_timeout(READ_TIMEOUT_SECONDS, 0);
 
-    // Log the data being sent
-    gLogger->debug("Debug: Sending POST request to {} with data: {}", API_URL, data.dump());
+    // Enable certificate verification for security
+    cli.enable_server_certificate_verification(true);
+
+    // Log the request safely (without exposing API key)
+    gLogger->debug("Debug: Sending POST request to {} with API key: {}", API_URL,
+                   redact_api_key(actual_api_key));
 
     // Send the POST request
     auto res = cli.Post(std::string(API_URL), headers, data.dump(), std::string(APPLICATION_JSON));
@@ -164,6 +349,12 @@ std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, std::string_v
         throw ApiException(status, "OpenAI server error - try again later");
     default:
         throw ApiException(status, "Unexpected HTTP status code: " + std::to_string(res->status));
+    }
+
+    // Validate response size to prevent DoS attacks
+    if (res->body.length() > MAX_RESPONSE_LENGTH)
+    {
+        throw ValidationException("Response exceeds maximum allowed size");
     }
 
     // Parse and validate response body
@@ -211,4 +402,22 @@ std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, std::string_v
     gLogger->debug("Finish reason: {}", finish_reason);
 
     return first_choice["message"][content_key].get<std::string>();
+}
+
+/**
+ * @brief Modern config-based API function using RAII and smart pointers
+ */
+std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, const Config& config)
+{
+    // Validate configuration and input
+    config.validate();
+    validate_prompt(prompt);
+
+    if (config.api_key().empty())
+    {
+        throw ConfigurationException("API key not configured");
+    }
+
+    // Use the legacy function for now, but with validated config
+    return get_gpt_chat_response(prompt, config.api_key(), config.system_prompt(), config.model());
 }

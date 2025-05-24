@@ -86,6 +86,12 @@ int main(int argc, const char* const argv[])
                 return EX_USAGE;
             }
             api_key = argv[i];
+            // Basic validation to prevent extremely long inputs
+            if (api_key.length() > 1024)
+            {
+                std::cerr << "Error: API key too long" << std::endl;
+                return EX_USAGE;
+            }
         }
         else if (arg == "-s" || arg == "--sys_prompt")
         {
@@ -95,6 +101,12 @@ int main(int argc, const char* const argv[])
                 return EX_USAGE;
             }
             system_prompt = argv[i];
+            // Basic validation to prevent extremely long inputs
+            if (system_prompt.length() > 100000)
+            {
+                std::cerr << "Error: System prompt too long" << std::endl;
+                return EX_USAGE;
+            }
         }
         else if (arg == "-l" || arg == "--log_file")
         {
@@ -104,6 +116,12 @@ int main(int argc, const char* const argv[])
                 return EX_USAGE;
             }
             log_file = argv[i];
+            // Validate log file path
+            if (log_file.empty() || log_file.length() > 4096)
+            {
+                std::cerr << "Error: Invalid log file path" << std::endl;
+                return EX_USAGE;
+            }
         }
         else if (arg == "-m" || arg == "--gpt_model")
         {
@@ -113,6 +131,12 @@ int main(int argc, const char* const argv[])
                 return EX_USAGE;
             }
             gpt_model = argv[i];
+            // Validate model name
+            if (gpt_model.empty() || gpt_model.length() > 100)
+            {
+                std::cerr << "Error: Invalid model name" << std::endl;
+                return EX_USAGE;
+            }
         }
         else if (arg == "-L" || arg == "--log_level")
         {
@@ -141,6 +165,12 @@ int main(int argc, const char* const argv[])
         else
         {
             prompt = arg;
+            // Basic validation for prompt length
+            if (prompt.length() > 2000000) // 2MB limit
+            {
+                std::cerr << "Error: Prompt too long" << std::endl;
+                return EX_USAGE;
+            }
         }
     }
 
@@ -189,6 +219,11 @@ int main(int argc, const char* const argv[])
     {
         gLogger->critical("Configuration Error: {}", e.what());
         return EX_CONFIG;
+    }
+    catch (const cmdgpt::ValidationException& e)
+    {
+        gLogger->critical("Validation Error: {}", e.what());
+        return EX_DATAERR;
     }
     catch (const cmdgpt::ApiException& e)
     {
