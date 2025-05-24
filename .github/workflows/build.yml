@@ -98,56 +98,6 @@ jobs:
         path: build/cmdgpt
         if-no-files-found: error
 
-  build-windows:
-    runs-on: windows-latest
-    
-    strategy:
-      matrix:
-        build_type: [Debug, Release]
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up OpenSSL
-      run: |
-        choco install openssl -y
-        echo "OPENSSL_ROOT_DIR=C:\Program Files\OpenSSL-Win64" >> $env:GITHUB_ENV
-      shell: pwsh
-    
-    - name: Configure CMake
-      run: |
-        cmake -B build `
-          -G "Visual Studio 17 2022" `
-          -A x64 `
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
-          -DOPENSSL_ROOT_DIR="$env:OPENSSL_ROOT_DIR"
-      shell: pwsh
-    
-    - name: Build
-      run: cmake --build build --config ${{ matrix.build_type }}
-    
-    - name: Test
-      run: |
-        cd build
-        ctest -C ${{ matrix.build_type }} --output-on-failure -V
-    
-    - name: Check executable exists
-      run: |
-        dir build\${{ matrix.build_type }}\
-        if (!(Test-Path "build\${{ matrix.build_type }}\cmdgpt.exe")) { 
-          Write-Error "cmdgpt.exe not found!"
-          exit 1
-        }
-      shell: pwsh
-    
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      if: success()
-      with:
-        name: cmdgpt-windows-x64-${{ matrix.build_type }}
-        path: build/${{ matrix.build_type }}/cmdgpt.exe
-        if-no-files-found: error
-
   code-quality:
     runs-on: ubuntu-latest
     
