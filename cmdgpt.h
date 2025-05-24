@@ -14,7 +14,7 @@
  * - Security features including input validation
  *
  * @copyright Copyright (c) 2023 Joern Ihlenburg
- * @license MIT License
+ * @author Joern Ihlenburg
  */
 
 /*

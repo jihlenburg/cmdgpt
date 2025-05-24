@@ -36,6 +36,30 @@ if ! command -v doxygen &> /dev/null; then
     fi
 fi
 
+# Check if Graphviz is installed for call graphs
+if ! command -v dot &> /dev/null; then
+    echo -e "${YELLOW}Warning: Graphviz (dot) is not installed.${NC}"
+    echo "Call graphs and other diagrams will not be generated."
+    echo ""
+    echo "To install Graphviz:"
+    echo "  macOS:         brew install graphviz"
+    echo "  Ubuntu/Debian: sudo apt-get install graphviz"
+    echo "  Fedora:        sudo dnf install graphviz"
+    echo ""
+    echo "Would you like to install Graphviz now? (macOS only) [y/N]"
+    read -r response
+    if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+        if command -v brew &> /dev/null; then
+            echo "Installing Graphviz via Homebrew..."
+            brew install graphviz
+        else
+            echo -e "${YELLOW}Continuing without Graphviz...${NC}"
+        fi
+    fi
+else
+    echo -e "${GREEN}Graphviz found. Call graphs will be generated.${NC}"
+fi
+
 # Check if Doxyfile exists
 if [ ! -f "Doxyfile" ]; then
     echo -e "${RED}Error: Doxyfile not found in current directory.${NC}"

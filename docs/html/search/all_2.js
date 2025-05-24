@@ -1,0 +1,25 @@
+var searchData=
+[
+  ['choices_5fkey_0',['CHOICES_KEY',['../d0/d05/namespacecmdgpt.html#a94dafef4e4b2d7896bee5115f690e9c0',1,'cmdgpt']]],
+  ['clear_1',['clear',['../d5/def/classcmdgpt_1_1Conversation.html#af5b244bcc4eddc82ca31933915e31df9',1,'cmdgpt::Conversation']]],
+  ['cmdgpt_2',['cmdgpt',['../d0/d05/namespacecmdgpt.html',1,'']]],
+  ['cmdgpt_20documentation_3',['cmdgpt Documentation',['../index.html',1,'']]],
+  ['cmdgpt_2ecpp_4',['cmdgpt.cpp',['../dd/ddc/cmdgpt_8cpp.html',1,'']]],
+  ['cmdgpt_2eh_5',['cmdgpt.h',['../d3/d89/cmdgpt_8h.html',1,'']]],
+  ['cmdgptexception_6',['CmdGptException',['../d5/d1d/classcmdgpt_1_1CmdGptException.html',1,'cmdgpt::CmdGptException'],['../d5/d1d/classcmdgpt_1_1CmdGptException.html#a34b6293f0db0efe97a607bbf5f0b4256',1,'cmdgpt::CmdGptException::CmdGptException()']]],
+  ['code_7',['CODE',['../d0/d05/namespacecmdgpt.html#ad80490a020da0b0e42a468587f28ff88a08054846bbc9933fd0395f8be516a9f9',1,'cmdgpt']]],
+  ['code_20style_8',['Code Style',['..//Users/jihlenburg/Documents/Work/cmdgpt/README.md#autotoc_md14',1,'']]],
+  ['codes_9',['Exit Status Codes',['..//Users/jihlenburg/Documents/Work/cmdgpt/README.md#autotoc_md11',1,'']]],
+  ['command_20line_20options_10',['Command-Line Options',['..//Users/jihlenburg/Documents/Work/cmdgpt/README.md#autotoc_md8',1,'']]],
+  ['config_11',['Config',['../de/d57/classcmdgpt_1_1Config.html',1,'cmdgpt::Config'],['../de/d57/classcmdgpt_1_1Config.html#afb9a4dfce2f46fb6b866045ddab857ba',1,'cmdgpt::Config::Config()=default'],['../de/d57/classcmdgpt_1_1Config.html#a1d4e27f86ab8116936f44d3714fd10af',1,'cmdgpt::Config::Config(const Config &amp;)=delete'],['../de/d57/classcmdgpt_1_1Config.html#a6782464c05060db45864917438b1db63',1,'cmdgpt::Config::Config(Config &amp;&amp;)=default']]],
+  ['configfile_12',['ConfigFile',['../d3/d46/classcmdgpt_1_1ConfigFile.html',1,'cmdgpt::ConfigFile'],['../d3/d46/classcmdgpt_1_1ConfigFile.html#a4f5e12021aad9938d408c6f13b52c0fe',1,'cmdgpt::ConfigFile::ConfigFile()']]],
+  ['configuration_13',['Configuration',['../index.html#config_sec',1,'']]],
+  ['configurationexception_14',['ConfigurationException',['../d8/dd9/classcmdgpt_1_1ConfigurationException.html',1,'cmdgpt::ConfigurationException'],['../d8/dd9/classcmdgpt_1_1ConfigurationException.html#aec94449e74650a8f29e0d18ec7791c25',1,'cmdgpt::ConfigurationException::ConfigurationException()']]],
+  ['connection_5ftimeout_5fseconds_15',['CONNECTION_TIMEOUT_SECONDS',['../d0/d05/namespacecmdgpt.html#a780304312242a950b6764ebb6369a933',1,'cmdgpt']]],
+  ['considerations_16',['Security Considerations',['../index.html#security_sec',1,'']]],
+  ['content_17',['content',['../dd/d00/structcmdgpt_1_1Message.html#ad573acce2410b30b1dd98f53a5c1a826',1,'cmdgpt::Message']]],
+  ['content_5fkey_18',['CONTENT_KEY',['../d0/d05/namespacecmdgpt.html#a74fd231500cd510fd50d25c395706c2a',1,'cmdgpt']]],
+  ['content_5ftype_5fheader_19',['CONTENT_TYPE_HEADER',['../d0/d05/namespacecmdgpt.html#a4a9dc9c842020164e69c531bb939f41f',1,'cmdgpt']]],
+  ['contributing_20',['Contributing',['..//Users/jihlenburg/Documents/Work/cmdgpt/README.md#autotoc_md16',1,'']]],
+  ['conversation_21',['Conversation',['../d5/def/classcmdgpt_1_1Conversation.html',1,'cmdgpt::Conversation'],['../d5/def/classcmdgpt_1_1Conversation.html#af8a40f4a9750d1dda7436dab8aac9f39',1,'cmdgpt::Conversation::Conversation()']]]
+];

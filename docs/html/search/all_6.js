@@ -1,0 +1,8 @@
+var searchData=
+[
+  ['get_5fdefault_5fpath_0',['get_default_path',['../d3/d46/classcmdgpt_1_1ConfigFile.html#addfc8e03c97bd83f1071c803a06daf8e',1,'cmdgpt::ConfigFile']]],
+  ['get_5fgpt_5fchat_5fresponse_1',['get_gpt_chat_response',['../d0/d05/namespacecmdgpt.html#a19ed2e07630c91548444910087b275fb',1,'cmdgpt::get_gpt_chat_response(std::string_view prompt, std::string_view api_key=&quot;&quot;, std::string_view system_prompt=&quot;&quot;, std::string_view model=&quot;&quot;)'],['../d0/d05/namespacecmdgpt.html#abced6f324d1b470766d2a964e5f6d108',1,'cmdgpt::get_gpt_chat_response(std::string_view prompt, const Config &amp;config)'],['../d0/d05/namespacecmdgpt.html#afcc71e70bfea7ed640705a027ca741e4',1,'cmdgpt::get_gpt_chat_response(const Conversation &amp;conversation, const Config &amp;config)']]],
+  ['get_5fgpt_5fchat_5fresponse_5fstream_2',['get_gpt_chat_response_stream',['../d0/d05/namespacecmdgpt.html#add667c5340dd1a449ae986638d9566eb',1,'cmdgpt::get_gpt_chat_response_stream(std::string_view prompt, const Config &amp;config, StreamCallback callback)'],['../d0/d05/namespacecmdgpt.html#a088f60fa3337c552a0398c114cb63a3a',1,'cmdgpt::get_gpt_chat_response_stream(const Conversation &amp;conversation, const Config &amp;config, StreamCallback callback)']]],
+  ['get_5fmessages_3',['get_messages',['../d5/def/classcmdgpt_1_1Conversation.html#ac4344152804352f5d4cd3bda317ed447',1,'cmdgpt::Conversation']]],
+  ['glogger_4',['gLogger',['../d3/d89/cmdgpt_8h.html#ad5673eba27ce3f71180bfb32308b130b',1,'gLogger:&#160;cmdgpt.cpp'],['../dd/ddc/cmdgpt_8cpp.html#ad5673eba27ce3f71180bfb32308b130b',1,'gLogger:&#160;cmdgpt.cpp']]]
+];
