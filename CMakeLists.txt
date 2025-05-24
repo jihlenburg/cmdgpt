@@ -54,6 +54,8 @@ if(WIN32)
     if(DEFINED ENV{OPENSSL_ROOT_DIR})
         set(OPENSSL_ROOT_DIR $ENV{OPENSSL_ROOT_DIR})
     endif()
+    # Common Windows OpenSSL locations
+    set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} "C:/Program Files/OpenSSL-Win64" "C:/OpenSSL-Win64" "C:/Program Files/OpenSSL" "C:/OpenSSL")
     set(OPENSSL_USE_STATIC_LIBS TRUE)
 endif()
 
@@ -66,7 +68,8 @@ endif()
 add_library(cmdgpt_lib STATIC cmdgpt.cpp)
 target_include_directories(cmdgpt_lib PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR} 
-    ${httplib_SOURCE_DIR})
+    ${httplib_SOURCE_DIR}
+    ${spdlog_SOURCE_DIR}/include)
 target_link_libraries(cmdgpt_lib PUBLIC 
     nlohmann_json::nlohmann_json 
     spdlog::spdlog 
