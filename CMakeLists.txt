@@ -66,9 +66,7 @@ endif()
 add_library(cmdgpt_lib STATIC cmdgpt.cpp)
 target_include_directories(cmdgpt_lib PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR} 
-    ${httplib_SOURCE_DIR} 
-    ${json_SOURCE_DIR}/include 
-    ${spdlog_SOURCE_DIR}/include)
+    ${httplib_SOURCE_DIR})
 target_link_libraries(cmdgpt_lib PUBLIC 
     nlohmann_json::nlohmann_json 
     spdlog::spdlog 
