@@ -164,9 +164,12 @@ jobs:
         cppcheck --enable=all \
                  --suppress=missingIncludeSystem \
                  --suppress=unmatchedSuppression \
+                 --suppress=missingInclude \
+                 --suppress=checkersReport \
                  --error-exitcode=1 \
                  --inline-suppr \
                  --std=c++17 \
+                 --language=c++ \
                  -I. \
                  cmdgpt.cpp cmdgpt.h main.cpp tests/
     

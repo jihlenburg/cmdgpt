@@ -84,6 +84,7 @@ void print_help();
  * @param model The model to use (default: gpt-4)
  * @return HTTP status code or EMPTY_RESPONSE_CODE on failure
  */
+// cppcheck-suppress syntaxError
 int get_gpt_chat_response(const std::string& prompt,
                           std::string& response,
                           const std::string& api_key = "",

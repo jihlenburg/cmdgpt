@@ -36,7 +36,7 @@ SOFTWARE.
 /**
  * @brief Parses command-line arguments and environment variables
  */
-int main(int argc, char* argv[]) 
+int main(int argc, const char* const argv[]) 
 {
     std::string api_key;
     std::string system_prompt;
@@ -44,8 +44,6 @@ int main(int argc, char* argv[])
     std::string log_file;
     spdlog::level::level_enum log_level;
     std::string prompt;
-    std::string response;
-    int status_code;
 
     // Parse environment variables
     api_key = getenv("OPENAI_API_KEY") ? getenv("OPENAI_API_KEY") : "";
@@ -197,7 +195,8 @@ int main(int argc, char* argv[])
     // Make the API request and handle the response
     try 
     {
-        status_code = get_gpt_chat_response(prompt, response, api_key, system_prompt, gpt_model);
+        std::string response;
+        int status_code = get_gpt_chat_response(prompt, response, api_key, system_prompt, gpt_model);
         
         if (status_code == EMPTY_RESPONSE_CODE) 
         {
