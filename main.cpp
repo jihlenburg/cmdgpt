@@ -24,7 +24,7 @@ SOFTWARE.
 
 #include "cmdgpt.h"
 #include "spdlog/sinks/ansicolor_sink.h"
-#include "spdlog/sinks/file_sinks.h"
+#include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/spdlog.h"
 #include <cstdlib>
 #include <fstream>
@@ -147,7 +147,7 @@ int main(int argc, const char* const argv[])
     try
     {
         auto console_sink = std::make_shared<spdlog::sinks::ansicolor_stdout_sink_mt>();
-        auto file_sink = std::make_shared<spdlog::sinks::simple_file_sink_mt>(log_file, true);
+        auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(log_file, true);
         gLogger = std::make_shared<spdlog::logger>(
             "multi_sink", spdlog::sinks_init_list{console_sink, file_sink});
         gLogger->set_level(log_level);

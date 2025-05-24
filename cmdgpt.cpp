@@ -26,7 +26,7 @@ SOFTWARE.
 #include "httplib.h"
 #include "nlohmann/json.hpp"
 #include "spdlog/sinks/ansicolor_sink.h"
-#include "spdlog/sinks/file_sinks.h"
+#include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/spdlog.h"
 #include <cstdlib>
 #include <fstream>

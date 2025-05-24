@@ -1,5 +1,9 @@
+# GitHub Actions workflow for continuous integration
+# This workflow builds and tests cmdgpt on multiple platforms and configurations
+
 name: Build and Test
 
+# Trigger conditions: run on pushes to main/develop and pull requests to main
 on:
   push:
     branches: [ main, develop ]
@@ -7,9 +11,11 @@ on:
     branches: [ main ]
 
 jobs:
+  # Linux build job - tests with both GCC and Clang compilers
   build-linux:
     runs-on: ubuntu-latest
     
+    # Build matrix: test all combinations of compiler and build type
     strategy:
       matrix:
         compiler: [gcc, clang]
@@ -18,16 +24,20 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
+    # Install required system packages
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential cmake libssl-dev
+        # Install clang if it's the selected compiler
         if [ "${{ matrix.compiler }}" = "clang" ]; then
           sudo apt-get install -y clang
         fi
     
+    # Configure the project with CMake
     - name: Configure CMake
       env:
+        # Set compiler based on matrix selection
         CC: ${{ matrix.compiler == 'clang' && 'clang' || 'gcc' }}
         CXX: ${{ matrix.compiler == 'clang' && 'clang++' || 'g++' }}
       run: |
@@ -57,9 +67,11 @@ jobs:
         path: build/cmdgpt
         if-no-files-found: error
 
+  # macOS build job - tests on latest macOS with Apple Clang
   build-macos:
     runs-on: macos-latest
     
+    # Build matrix: test both Debug and Release configurations
     strategy:
       matrix:
         build_type: [Debug, Release]
@@ -67,10 +79,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
+    # Install required packages via Homebrew
     - name: Install dependencies
       run: |
         brew install cmake openssl
     
+    # Configure with CMake, specifying OpenSSL location (Homebrew doesn't link it)
     - name: Configure CMake
       run: |
         cmake -B build \
@@ -98,35 +112,47 @@ jobs:
         path: build/cmdgpt
         if-no-files-found: error
 
+  # Code quality checks - static analysis and formatting
   code-quality:
     runs-on: ubuntu-latest
     
     steps:
     - uses: actions/checkout@v4
     
+    # Install code quality tools
     - name: Install tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y cppcheck clang-format-14
+        sudo apt-get install -y cppcheck clang-format-14 cmake libssl-dev
     
+    # Configure project to download dependencies for cppcheck
+    - name: Configure CMake (for dependency headers)
+      run: |
+        cmake -B build
+    
+    # Run static analysis with cppcheck
     - name: Run cppcheck
       run: |
-        cppcheck --enable=all \
-                 --suppress=missingIncludeSystem \
-                 --suppress=unmatchedSuppression \
-                 --suppress=missingInclude \
-                 --suppress=checkersReport \
-                 --error-exitcode=1 \
-                 --inline-suppr \
-                 --std=c++17 \
-                 --language=c++ \
-                 -I. \
-                 cmdgpt.cpp cmdgpt.h main.cpp tests/
+        cppcheck --enable=all \                     # Enable all checks
+                 --suppress=missingIncludeSystem \   # Don't warn about system headers (e.g., <iostream>)
+                 --suppress=unmatchedSuppression \   # Don't warn about unused suppressions
+                 --suppress=missingInclude \         # Don't warn about third-party headers
+                 --suppress=checkersReport \         # Don't show checker statistics
+                 --suppress=unusedFunction \         # Don't warn about unused functions (cross-file usage)
+                 --suppress=unknownMacro \           # Don't warn about Catch2 macros
+                 --error-exitcode=1 \                # Exit with error if issues found
+                 --inline-suppr \                    # Support inline suppressions
+                 --std=c++17 \                       # Use C++17 standard
+                 --language=c++ \                    # Force C++ mode
+                 -I. \                               # Include current directory
+                 cmdgpt.cpp cmdgpt.h main.cpp tests/cmdgpt_tests.cpp
     
+    # Verify code formatting matches .clang-format rules
     - name: Check formatting
       run: |
-        # Check if files are properly formatted
+        # Find all C++ source files (excluding build directory and .github)
         find . -name "*.cpp" -o -name "*.h" | grep -v build | grep -v ".github" | while read file; do
           echo "Checking $file"
+          # --dry-run: don't modify files, --Werror: treat warnings as errors
           clang-format-14 --dry-run --Werror "$file" || exit 1
         done
