@@ -62,7 +62,7 @@ namespace fs = std::filesystem;
 
 /**
  * @brief Map of string log levels to spdlog::level::level_enum values
- * 
+ *
  * Used for parsing log level strings from environment variables and config files.
  * Supports standard log levels: TRACE, DEBUG, INFO, WARN, ERROR, CRITICAL.
  */
@@ -74,7 +74,7 @@ const std::map<std::string, spdlog::level::level_enum> log_levels = {
 
 /**
  * @brief Global logger instance for application-wide logging
- * 
+ *
  * Initialized based on configuration settings. Can write to file or console.
  * Thread-safe and supports multiple log levels for debugging.
  */
@@ -258,7 +258,7 @@ void cmdgpt::Config::load_from_environment()
     // Load configuration from environment variables
     // Environment variables take precedence over defaults but not command-line args
     // This allows users to set defaults without modifying code or config files
-    
+
     // Load API key from environment if available
     // OPENAI_API_KEY is the standard environment variable for OpenAI API authentication
     if (const char* env_key = std::getenv("OPENAI_API_KEY"))
