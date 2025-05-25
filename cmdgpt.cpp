@@ -236,7 +236,7 @@ void cmdgpt::Config::set_model(std::string_view model)
     {
         throw ValidationException("Invalid model name");
     }
-    model_ = model.empty() ? std::string{DEFAULT_MODEL} : std::string{model};
+    model_ = std::string{model};
 }
 
 void cmdgpt::Config::set_log_file(std::string_view file)
@@ -289,14 +289,14 @@ void cmdgpt::Config::load_from_environment()
     // Load log level from environment if available
     if (const char* env_log_level = std::getenv("CMDGPT_LOG_LEVEL"))
     {
-        static const std::map<std::string, spdlog::level::level_enum> log_levels = {
+        static const std::map<std::string, spdlog::level::level_enum> level_map = {
             {"TRACE", spdlog::level::trace}, {"DEBUG", spdlog::level::debug},
             {"INFO", spdlog::level::info},   {"WARN", spdlog::level::warn},
             {"ERROR", spdlog::level::err},   {"CRITICAL", spdlog::level::critical},
         };
 
-        const auto it = log_levels.find(env_log_level);
-        if (it != log_levels.end())
+        const auto it = level_map.find(env_log_level);
+        if (it != level_map.end())
         {
             log_level_ = it->second;
         }
@@ -876,7 +876,7 @@ std::string cmdgpt::format_output(const std::string& content, OutputFormat forma
 /**
  * @brief Run interactive REPL mode
  */
-void cmdgpt::run_interactive_mode(Config& config)
+void cmdgpt::run_interactive_mode(const Config& config)
 {
     std::cout << "cmdgpt " << VERSION << " - Interactive Mode\n";
     std::cout << "Type '/help' for commands, '/exit' to quit\n\n";

@@ -679,7 +679,7 @@ std::string format_output(const std::string& content, OutputFormat format);
  *
  * @param config Configuration object
  */
-void run_interactive_mode(Config& config);
+void run_interactive_mode(const Config& config);
 
 } // namespace cmdgpt
 

@@ -74,7 +74,6 @@ int main(int argc, const char* const argv[])
 
     std::string prompt;
     bool interactive_mode = false;
-    bool streaming_mode = false;
     cmdgpt::OutputFormat output_format = cmdgpt::OutputFormat::PLAIN;
 
     static const std::map<std::string, spdlog::level::level_enum> log_levels = {
