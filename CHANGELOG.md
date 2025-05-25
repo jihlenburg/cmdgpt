@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3] - 2025-01-25
+
+### Added
+- Interactive REPL mode with conversation management (`-i`/`--interactive`)
+- Configuration file support (`~/.cmdgptrc`)
+- Multiple output formats: plain, JSON, Markdown, code extraction (`-f`/`--format`)
+- Conversation history with save/load functionality in interactive mode
+- Comprehensive Doxygen documentation with call graphs
+- Documentation build script (`build_docs.sh`) with auto-install option
+- Enhanced security features:
+  - Input validation for API keys and prompts
+  - Certificate verification for HTTPS connections
+  - API key redaction in logs
+  - Response size limits to prevent DoS
+- Exception-based error handling with custom exception hierarchy
+- Namespace organization (`cmdgpt::`)
+- Modern C++ features (constexpr, string_view, RAII)
+- Context management with automatic trimming for long conversations
+- Comprehensive inline documentation and code comments
+
+### Changed
+- Refactored to library pattern with namespace encapsulation
+- Modernized code to use C++17 features throughout
+- Updated default model to `gpt-4-turbo-preview`
+- Improved error messages with specific exception types
+- Enhanced logging with better API key protection
+- Reorganized code structure with clear section markers
+- Updated build system to include documentation generation
+- Improved test coverage for new features
+
+### Fixed
+- Potential security vulnerabilities in input handling
+- Memory safety issues with modern C++ patterns
+- Build warnings and deprecated function usage
+
+### Security
+- Added input validation for all user inputs
+- Implemented secure API key handling with redaction
+- Enabled SSL/TLS certificate verification
+- Added protection against oversized responses
+
 ## [0.2] - 2024-01-24
 
 ### Added

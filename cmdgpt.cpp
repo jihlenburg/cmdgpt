@@ -56,15 +56,33 @@ using json = nlohmann::json;
 using namespace cmdgpt;
 namespace fs = std::filesystem;
 
-// Map of string log levels to spdlog::level::level_enum values
+// ============================================================================
+// Global Variables and Constants
+// ============================================================================
+
+/**
+ * @brief Map of string log levels to spdlog::level::level_enum values
+ * 
+ * Used for parsing log level strings from environment variables and config files.
+ * Supports standard log levels: TRACE, DEBUG, INFO, WARN, ERROR, CRITICAL.
+ */
 const std::map<std::string, spdlog::level::level_enum> log_levels = {
     {"TRACE", spdlog::level::trace}, {"DEBUG", spdlog::level::debug},
     {"INFO", spdlog::level::info},   {"WARN", spdlog::level::warn},
     {"ERROR", spdlog::level::err},   {"CRITICAL", spdlog::level::critical},
 };
 
-// Global logger variable accessible by all functions
+/**
+ * @brief Global logger instance for application-wide logging
+ * 
+ * Initialized based on configuration settings. Can write to file or console.
+ * Thread-safe and supports multiple log levels for debugging.
+ */
 std::shared_ptr<spdlog::logger> gLogger;
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
 
 /**
  * @brief Prints the help message to the console.
@@ -119,6 +137,10 @@ void cmdgpt::validate_api_key(std::string_view api_key)
     }
 
     // Check for potentially dangerous characters
+    // Only allow printable ASCII characters (32-126) to prevent:
+    // - Control characters that could affect terminal output
+    // - Non-ASCII characters that might cause encoding issues
+    // - Potential injection attacks via special characters
     for (char c : api_key)
     {
         if (c < 32 || c > 126) // Only allow printable ASCII
@@ -186,6 +208,10 @@ OutputFormat cmdgpt::parse_output_format(std::string_view format)
         return OutputFormat::PLAIN;
 }
 
+// ============================================================================
+// Config Class Implementation
+// ============================================================================
+
 /**
  * @brief Config class implementation
  */
@@ -229,19 +255,26 @@ void cmdgpt::Config::set_log_level(spdlog::level::level_enum level)
 
 void cmdgpt::Config::load_from_environment()
 {
+    // Load configuration from environment variables
+    // Environment variables take precedence over defaults but not command-line args
+    // This allows users to set defaults without modifying code or config files
+    
     // Load API key from environment if available
+    // OPENAI_API_KEY is the standard environment variable for OpenAI API authentication
     if (const char* env_key = std::getenv("OPENAI_API_KEY"))
     {
         api_key_ = env_key;
     }
 
     // Load system prompt from environment if available
+    // OPENAI_SYS_PROMPT allows customizing AI behavior without command-line args
     if (const char* env_prompt = std::getenv("OPENAI_SYS_PROMPT"))
     {
         system_prompt_ = env_prompt;
     }
 
     // Load model from environment if available
+    // OPENAI_GPT_MODEL allows switching models (e.g., gpt-4, gpt-3.5-turbo)
     if (const char* env_model = std::getenv("OPENAI_GPT_MODEL"))
     {
         model_ = env_model;
@@ -292,6 +325,10 @@ void cmdgpt::Config::validate() const
         throw ValidationException("Invalid log file configuration");
     }
 }
+
+// ============================================================================
+// API Communication Functions
+// ============================================================================
 
 /**
  * @brief Sends a chat completion request to the OpenAI API
@@ -356,10 +393,18 @@ std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, std::string_v
     httplib::Client cli{std::string(SERVER_URL)};
 
     // Set connection and read timeouts using security constants
+    // Connection timeout (10s): Reasonable time for establishing HTTPS connection
+    // Read timeout (30s): Allows for OpenAI's processing time on complex prompts
+    // These prevent indefinite hangs while accommodating normal API response times
     cli.set_connection_timeout(CONNECTION_TIMEOUT_SECONDS, 0);
     cli.set_read_timeout(READ_TIMEOUT_SECONDS, 0);
 
     // Enable certificate verification for security
+    // This ensures we're actually talking to OpenAI's servers and not a MITM attacker
+    // Certificate validation includes:
+    // - Checking certificate chain to trusted root CA
+    // - Verifying certificate hasn't expired
+    // - Ensuring hostname matches certificate's CN/SAN
     cli.enable_server_certificate_verification(true);
 
     // Log the request safely (without exposing API key)
@@ -379,6 +424,10 @@ std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, std::string_v
                    res->body);
 
     // Handle HTTP response status codes
+    // OpenAI API returns standard HTTP status codes:
+    // - 2xx: Success
+    // - 4xx: Client errors (bad request, auth issues, rate limits)
+    // - 5xx: Server errors (OpenAI service issues)
     const auto status = static_cast<HttpStatus>(res->status);
     switch (status)
     {
@@ -386,26 +435,33 @@ std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, std::string_v
         // Success - continue processing
         break;
     case HttpStatus::BAD_REQUEST:
+        // Usually means invalid model, malformed JSON, or invalid parameters
         throw ApiException(status, "Bad request - check your input parameters");
     case HttpStatus::UNAUTHORIZED:
+        // Invalid or missing API key
         throw ApiException(status, "Unauthorized - check your API key");
     case HttpStatus::FORBIDDEN:
+        // Account doesn't have access to the requested model or feature
         throw ApiException(status, "Forbidden - insufficient permissions");
     case HttpStatus::NOT_FOUND:
+        // Wrong API endpoint or model name
         throw ApiException(status, "API endpoint not found");
     case HttpStatus::INTERNAL_SERVER_ERROR:
+        // OpenAI service issue - usually temporary
         throw ApiException(status, "OpenAI server error - try again later");
     default:
         throw ApiException(status, "Unexpected HTTP status code: " + std::to_string(res->status));
     }
 
     // Validate response size to prevent DoS attacks
+    // Large responses could consume excessive memory or indicate malicious activity
     if (res->body.length() > MAX_RESPONSE_LENGTH)
     {
         throw ValidationException("Response exceeds maximum allowed size");
     }
 
     // Parse and validate response body
+    // Empty responses indicate server issues or network problems
     if (res->body.empty())
     {
         throw ApiException(HttpStatus::EMPTY_RESPONSE, "Received empty response from API");
@@ -470,14 +526,20 @@ std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, const Config&
     return get_gpt_chat_response(prompt, config.api_key(), config.system_prompt(), config.model());
 }
 
-/**
- * @brief Conversation class implementation
- */
+// ============================================================================
+// Conversation Class Implementation
+// ============================================================================
+
 void cmdgpt::Conversation::add_message(std::string_view role, std::string_view content)
 {
     messages_.emplace_back(role, content);
 
     // Trim conversation if it gets too long
+    // This implements a sliding window approach to maintain conversation context
+    // within the model's token limits while preserving the most important messages:
+    // 1. Always keep the system message (index 0) for consistent behavior
+    // 2. Keep at least one user message to maintain conversation continuity
+    // 3. Remove messages from oldest to newest (FIFO) starting after system message
     while (estimate_tokens() > MAX_CONTEXT_LENGTH)
     {
         if (messages_.size() <= 2) // Keep at least system + one user message
@@ -548,14 +610,19 @@ size_t cmdgpt::Conversation::estimate_tokens() const
     for (const auto& msg : messages_)
     {
         // Rough estimate: 1 token ~= 4 characters
+        // This is based on OpenAI's guidance that on average, 1 token represents
+        // approximately 4 characters of English text. This is a conservative
+        // estimate that works well for English but may vary for other languages.
+        // For more accurate token counting, consider using tiktoken library.
         total += (msg.role.length() + msg.content.length()) / 4;
     }
     return total;
 }
 
-/**
- * @brief ConfigFile class implementation
- */
+// ============================================================================
+// ConfigFile Class Implementation
+// ============================================================================
+
 bool cmdgpt::ConfigFile::load(const fs::path& path)
 {
     if (!fs::exists(path))
@@ -611,6 +678,8 @@ void cmdgpt::ConfigFile::save(const fs::path& path) const
 
 void cmdgpt::ConfigFile::apply_to(Config& config) const
 {
+    // Helper lambda to safely retrieve config values
+    // Returns std::optional to handle missing keys gracefully
     auto get_value = [this](const std::string& key) -> std::optional<std::string>
     {
         auto it = values_.find(key);
@@ -684,7 +753,7 @@ std::string cmdgpt::get_gpt_chat_response(const Conversation& conversation, cons
     cli.set_connection_timeout(CONNECTION_TIMEOUT_SECONDS, 0);
     cli.set_read_timeout(READ_TIMEOUT_SECONDS, 0);
 
-    // Enable certificate verification for security
+    // Enable certificate verification for security (same as above)
     cli.enable_server_certificate_verification(true);
 
     // Log the request safely
@@ -703,11 +772,13 @@ std::string cmdgpt::get_gpt_chat_response(const Conversation& conversation, cons
     const auto status = static_cast<HttpStatus>(res->status);
     if (status != HttpStatus::OK)
     {
+        // Construct error message with fallback handling
         std::string error_msg = "HTTP " + std::to_string(res->status);
         if (!res->body.empty())
         {
             try
             {
+                // Try to extract structured error message from OpenAI's error response
                 json error_json = json::parse(res->body);
                 if (error_json.contains("error") && error_json["error"].contains("message"))
                 {
@@ -716,6 +787,8 @@ std::string cmdgpt::get_gpt_chat_response(const Conversation& conversation, cons
             }
             catch (...)
             {
+                // If JSON parsing fails, use generic HTTP status message
+                // This handles cases where the error response isn't valid JSON
             }
         }
         throw ApiException(status, error_msg);
@@ -748,9 +821,10 @@ std::string cmdgpt::get_gpt_chat_response(const Conversation& conversation, cons
     return first_choice["message"][CONTENT_KEY].get<std::string>();
 }
 
-/**
- * @brief Format output based on specified format
- */
+// ============================================================================
+// Output Formatting Functions
+// ============================================================================
+
 std::string cmdgpt::format_output(const std::string& content, OutputFormat format)
 {
     switch (format)
@@ -774,6 +848,12 @@ std::string cmdgpt::format_output(const std::string& content, OutputFormat forma
     case OutputFormat::CODE:
     {
         // Extract code blocks if present
+        // Regex pattern explanation:
+        // ``` - Match opening triple backticks
+        // (?:\w+)? - Optional language identifier (e.g., python, cpp)
+        // \n - Newline after language identifier
+        // ([^`]+) - Capture group 1: code content (any char except backtick)
+        // ``` - Match closing triple backticks
         std::regex code_regex(R"(```(?:\w+)?\n([^`]+)```)");
         std::smatch match;
         if (std::regex_search(content, match, code_regex))
@@ -788,6 +868,10 @@ std::string cmdgpt::format_output(const std::string& content, OutputFormat forma
         return content;
     }
 }
+
+// ============================================================================
+// Interactive Mode
+// ============================================================================
 
 /**
  * @brief Run interactive REPL mode
@@ -812,23 +896,28 @@ void cmdgpt::run_interactive_mode(Config& config)
         if (!std::getline(std::cin, line))
             break;
 
-        // Trim whitespace
+        // Trim whitespace from both ends of input
+        // This prevents issues with accidental spaces and ensures clean command parsing
         line.erase(0, line.find_first_not_of(" \t"));
         line.erase(line.find_last_not_of(" \t") + 1);
 
         if (line.empty())
             continue;
 
-        // Handle commands
+        // Handle special commands starting with '/'
+        // Commands provide control over the interactive session
         if (line[0] == '/')
         {
+            // Exit commands - terminate the interactive session
             if (line == "/exit" || line == "/quit")
             {
                 break;
             }
+            // Clear command - reset conversation history but keep system prompt
             else if (line == "/clear")
             {
                 conversation.clear();
+                // Re-add system prompt to maintain consistent AI behavior
                 if (!config.system_prompt().empty())
                 {
                     conversation.add_message(SYSTEM_ROLE, config.system_prompt());
@@ -836,6 +925,7 @@ void cmdgpt::run_interactive_mode(Config& config)
                 std::cout << "Conversation cleared.\n";
                 continue;
             }
+            // Help command - display available commands
             else if (line == "/help")
             {
                 std::cout << "Available commands:\n";
@@ -846,6 +936,8 @@ void cmdgpt::run_interactive_mode(Config& config)
                 std::cout << "  /exit     - Exit interactive mode\n";
                 continue;
             }
+            // Save command - persist conversation to JSON file
+            // Usage: /save [filename] (defaults to conversation.json)
             else if (line.substr(0, 5) == "/save")
             {
                 std::string filename = "conversation.json";
@@ -864,6 +956,8 @@ void cmdgpt::run_interactive_mode(Config& config)
                 }
                 continue;
             }
+            // Load command - restore conversation from JSON file
+            // Usage: /load [filename] (defaults to conversation.json)
             else if (line.substr(0, 5) == "/load")
             {
                 std::string filename = "conversation.json";
@@ -884,6 +978,7 @@ void cmdgpt::run_interactive_mode(Config& config)
             }
             else
             {
+                // Unknown command - guide user to help
                 std::cout << "Unknown command. Type '/help' for available commands.\n";
                 continue;
             }

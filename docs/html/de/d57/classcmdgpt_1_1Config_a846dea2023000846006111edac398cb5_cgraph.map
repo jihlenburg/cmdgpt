@@ -1,5 +1,0 @@
-<map id="cmdgpt::Config::validate" name="cmdgpt::Config::validate">
-<area shape="rect" id="Node000001" title="Validate all configuration values." alt="" coords="5,5,169,31"/>
-<area shape="rect" id="Node000002" href="$d0/d05/namespacecmdgpt.html#a2a8346a32e6ad2d2a118e0c3a084761e" title="Validates and sanitizes API key input." alt="" coords="217,5,386,31"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="169,16,201,16,201,21,169,21"/>
-</map>

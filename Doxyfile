@@ -83,7 +83,7 @@ WARN_LINE_FORMAT       = "at line $line of file $file"
 WARN_LOGFILE           = 
 
 # Configuration options related to the input files
-INPUT                  = cmdgpt.h cmdgpt.cpp main.cpp mainpage.dox README.md
+INPUT                  = cmdgpt.h cmdgpt.cpp main.cpp mainpage.dox README.md CHANGELOG.md
 INPUT_ENCODING         = UTF-8
 INPUT_FILE_ENCODING    = 
 FILE_PATTERNS          = *.c \
@@ -110,7 +110,7 @@ INPUT_FILTER           =
 FILTER_PATTERNS        = 
 FILTER_SOURCE_FILES    = NO
 FILTER_SOURCE_PATTERNS = 
-USE_MDFILE_AS_MAINPAGE = README.md
+USE_MDFILE_AS_MAINPAGE =
 
 # Configuration options related to source browsing
 SOURCE_BROWSER         = YES

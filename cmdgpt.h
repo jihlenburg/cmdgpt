@@ -164,6 +164,15 @@ enum class OutputFormat
 OutputFormat parse_output_format(std::string_view format);
 
 // Custom exception classes for better error handling
+
+/**
+ * @brief Base exception class for cmdgpt errors
+ * 
+ * This is the base class for all cmdgpt-specific exceptions.
+ * Derives from std::runtime_error to provide standard exception interface.
+ * 
+ * @see ApiException, NetworkException, ConfigurationException, ValidationException
+ */
 class CmdGptException : public std::runtime_error
 {
   public:
@@ -172,6 +181,20 @@ class CmdGptException : public std::runtime_error
     }
 };
 
+/**
+ * @brief Exception for API-related errors
+ * 
+ * Thrown when the OpenAI API returns an error response or when
+ * the API response cannot be parsed correctly. Stores the HTTP
+ * status code for programmatic error handling.
+ * 
+ * Common status codes:
+ * - 400: Bad Request (invalid parameters)
+ * - 401: Unauthorized (invalid API key)
+ * - 429: Too Many Requests (rate limit exceeded)
+ * - 500: Internal Server Error
+ * - 503: Service Unavailable
+ */
 class ApiException : public CmdGptException
 {
   public:
@@ -191,6 +214,16 @@ class ApiException : public CmdGptException
     HttpStatus status_code_;
 };
 
+/**
+ * @brief Exception for network-related errors
+ * 
+ * Thrown when network connectivity issues occur, including:
+ * - Connection timeouts
+ * - DNS resolution failures
+ * - SSL/TLS certificate errors
+ * - Socket errors
+ * - Proxy connection failures
+ */
 class NetworkException : public CmdGptException
 {
   public:
@@ -200,6 +233,16 @@ class NetworkException : public CmdGptException
     }
 };
 
+/**
+ * @brief Exception for configuration errors
+ * 
+ * Thrown when configuration is invalid or missing, including:
+ * - Missing API key
+ * - Invalid model names
+ * - Malformed configuration files
+ * - Invalid environment variables
+ * - Incompatible configuration combinations
+ */
 class ConfigurationException : public CmdGptException
 {
   public:
@@ -209,6 +252,16 @@ class ConfigurationException : public CmdGptException
     }
 };
 
+/**
+ * @brief Exception for validation errors
+ * 
+ * Thrown when input validation fails, including:
+ * - Invalid API key format
+ * - Empty or malformed prompts
+ * - Input containing potential security risks
+ * - Exceeding size limits
+ * - Invalid characters or control sequences
+ */
 class ValidationException : public CmdGptException
 {
   public:
@@ -331,11 +384,11 @@ class Config
     void validate() const;
 
   private:
-    std::string api_key_;
-    std::string system_prompt_{DEFAULT_SYSTEM_PROMPT};
-    std::string model_{DEFAULT_MODEL};
-    std::string log_file_{"logfile.txt"};
-    spdlog::level::level_enum log_level_{DEFAULT_LOG_LEVEL};
+    std::string api_key_;                               ///< OpenAI API key for authentication
+    std::string system_prompt_{DEFAULT_SYSTEM_PROMPT};  ///< System prompt to set AI behavior
+    std::string model_{DEFAULT_MODEL};                  ///< OpenAI model name (e.g., "gpt-4")
+    std::string log_file_{"logfile.txt"};               ///< Path to debug log file
+    spdlog::level::level_enum log_level_{DEFAULT_LOG_LEVEL}; ///< Logging verbosity level
 };
 
 /**

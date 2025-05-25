@@ -1,5 +1,0 @@
-<map id="cmdgpt::Conversation::get_messages" name="cmdgpt::Conversation::get_messages">
-<area shape="rect" id="Node000001" title="Get all messages in the conversation." alt="" coords="201,5,350,46"/>
-<area shape="rect" id="Node000002" href="$d0/d05/namespacecmdgpt.html#afcc71e70bfea7ed640705a027ca741e4" title="Sends a chat completion request with conversation history." alt="" coords="5,5,153,46"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="185,28,153,28,153,23,185,23"/>
-</map>

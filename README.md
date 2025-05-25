@@ -2,18 +2,23 @@
 
 [![Build and Test](https://github.com/jihlenburg/cmdgpt/actions/workflows/build.yml/badge.svg)](https://github.com/jihlenburg/cmdgpt/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.2-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3-blue.svg)](CHANGELOG.md)
 
 CmdGPT is a command-line interface (CLI) tool designed to interact with the OpenAI GPT API. It enables users to send prompts and receive responses from GPT models directly from the terminal.
 
 ## Features
 
 - 🚀 Fast and lightweight CLI for OpenAI's GPT models
+- 💬 Interactive REPL mode for conversational sessions
 - 🔧 Support for multiple GPT models (GPT-4, GPT-3.5-turbo, etc.)
 - 📝 Configurable system prompts for context setting
-- 🔐 Secure API key handling via environment variables or command-line
+- ⚙️ Configuration file support (~/.cmdgptrc)
+- 📁 Conversation history with save/load functionality
+- 📤 Multiple output formats (plain, JSON, Markdown, code extraction)
+- 🔐 Enhanced security with input validation and certificate verification
 - 📊 Multi-level logging with file and console output
 - 🖥️ Cross-platform support (Linux, macOS, Windows)
+- 📚 Comprehensive Doxygen documentation with call graphs
 - 🧪 Comprehensive test suite with Catch2
 
 ## Prerequisites
@@ -85,6 +90,15 @@ export OPENAI_API_KEY="your-api-key"
 
 # Set a custom system prompt
 ./cmdgpt -s "You are a helpful coding assistant" "Write a Python hello world"
+
+# Interactive mode
+./cmdgpt -i
+# Type '/help' for available commands
+
+# Output formatting
+./cmdgpt -f json "List 3 programming languages"
+./cmdgpt -f markdown "Create a simple README template"
+./cmdgpt -f code "Write a fibonacci function in Python"
 ```
 
 ### Command-Line Options
@@ -93,9 +107,11 @@ export OPENAI_API_KEY="your-api-key"
 |--------|-----------|-------------|
 | `-h` | `--help` | Show help message and exit |
 | `-v` | `--version` | Display version information |
+| `-i` | `--interactive` | Start interactive REPL mode |
+| `-f` | `--format` | Output format: plain, json, markdown, code (default: plain) |
 | `-k` | `--api_key` | Set OpenAI API key |
 | `-s` | `--sys_prompt` | Set system prompt for context |
-| `-m` | `--gpt_model` | Choose GPT model (default: gpt-4) |
+| `-m` | `--gpt_model` | Choose GPT model (default: gpt-4-turbo-preview) |
 | `-l` | `--log_file` | Specify log file path |
 | `-L` | `--log_level` | Set log level (TRACE, DEBUG, INFO, WARN, ERROR, CRITICAL) |
 
@@ -105,7 +121,7 @@ export OPENAI_API_KEY="your-api-key"
 |----------|-------------|---------|
 | `OPENAI_API_KEY` | Your OpenAI API key | (required) |
 | `OPENAI_SYS_PROMPT` | System prompt for the model | "You are a helpful assistant!" |
-| `OPENAI_GPT_MODEL` | GPT model to use | "gpt-4" |
+| `OPENAI_GPT_MODEL` | GPT model to use | "gpt-4-turbo-preview" |
 | `CMDGPT_LOG_FILE` | Log file path | "logfile.txt" |
 | `CMDGPT_LOG_LEVEL` | Logging level | "WARN" |
 
@@ -124,6 +140,34 @@ echo "Generated UUID: $RESPONSE"
 
 # Use a different model with custom system prompt
 ./cmdgpt -m gpt-3.5-turbo -s "You are a pirate" "Tell me about treasure"
+```
+
+### Configuration File
+
+Create a `.cmdgptrc` file in your home directory to set default values:
+
+```ini
+# ~/.cmdgptrc
+api_key=your-api-key-here
+model=gpt-4-turbo-preview
+system_prompt=You are a helpful coding assistant
+log_level=INFO
+log_file=/tmp/cmdgpt.log
+```
+
+### Interactive Mode
+
+Interactive mode provides a REPL interface for continuous conversations:
+
+```bash
+./cmdgpt -i
+
+# Available commands:
+# /help     - Show available commands
+# /clear    - Clear conversation history
+# /save [file] - Save conversation to JSON file
+# /load [file] - Load conversation from JSON file
+# /exit     - Exit interactive mode
 ```
 
 ## Exit Status Codes
@@ -154,7 +198,12 @@ cmdgpt/
 ├── LICENSE           # MIT License
 ├── README.md         # This file
 ├── CHANGELOG.md      # Version history
-└── CLAUDE.md         # AI assistant guide
+├── CLAUDE.md         # AI assistant guide
+├── Doxyfile          # Doxygen configuration
+├── build_docs.sh     # Documentation build script
+└── docs/             # Generated documentation (after build)
+    ├── images/       # Documentation images
+    └── mainpage.dox  # Documentation main page
 ```
 
 ### Code Style

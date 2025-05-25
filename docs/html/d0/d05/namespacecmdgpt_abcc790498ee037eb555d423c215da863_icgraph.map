@@ -1,5 +1,0 @@
-<map id="cmdgpt::print_help" name="cmdgpt::print_help">
-<area shape="rect" id="Node000001" title="Prints the help message to the console." alt="" coords="103,5,231,31"/>
-<area shape="rect" id="Node000002" href="$df/d0a/main_8cpp.html#a814244b02f6701fd8ead246678bb3dae" title="Parses command&#45;line arguments and environment variables." alt="" coords="5,5,55,31"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="87,21,55,21,55,16,87,16"/>
-</map>

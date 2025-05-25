@@ -1,7 +1,0 @@
-<map id="cmdgpt.h" name="cmdgpt.h">
-<area shape="rect" id="Node000001" title="Command&#45;line interface for OpenAI GPT API." alt="" coords="64,5,140,31"/>
-<area shape="rect" id="Node000002" href="$dd/ddc/cmdgpt_8cpp.html" title="Implementation of cmdgpt functionality." alt="" coords="5,79,95,105"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="87,45,61,80,57,77,82,42"/>
-<area shape="rect" id="Node000003" href="$df/d0a/main_8cpp.html" title="Main entry point for cmdgpt command&#45;line tool." alt="" coords="118,79,192,105"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="122,42,148,77,144,80,118,45"/>
-</map>

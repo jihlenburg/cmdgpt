@@ -1,2 +1,6 @@
 build/
+docs/html/
 .*/.DS_Store
+.DS_Store
+logfile.txt
+*.log
