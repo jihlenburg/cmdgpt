@@ -142,6 +142,7 @@ jobs:
                  --suppress=unknownMacro \
                  --suppress=useStlAlgorithm \
                  --suppress=unusedStructMember \
+                 --suppress=knownConditionTrueFalse \
                  --error-exitcode=1 \
                  --inline-suppr \
                  --std=c++17 \

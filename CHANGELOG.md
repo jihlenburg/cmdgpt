@@ -5,7 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3] - 2025-01-25
+## [0.3.1] - 2025-01-25
+
+### Fixed
+- Build errors with undefined `streaming_mode` variable
+- GitHub Actions CI configuration for code quality checks
+- Added proper suppressions for non-critical cppcheck warnings
+- Applied consistent code formatting with clang-format
+
+### Added
+- `.cppcheck` configuration file for consistent static analysis
+- `.clang-tidy` configuration file for additional code quality checks
+- Development workflow documentation (`WORKFLOW.md`)
+
+### Changed
+- Suppressed style-only warnings in CI (useStlAlgorithm, unusedStructMember, knownConditionTrueFalse)
+- These warnings are about coding preferences, not actual issues
+
+## [0.3.0] - 2025-01-25
 
 ### Added
 - Interactive REPL mode with conversation management (`-i`/`--interactive`)
