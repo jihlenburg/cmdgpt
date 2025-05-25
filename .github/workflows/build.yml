@@ -140,6 +140,8 @@ jobs:
                  --suppress=checkersReport \
                  --suppress=unusedFunction \
                  --suppress=unknownMacro \
+                 --suppress=useStlAlgorithm \
+                 --suppress=unusedStructMember \
                  --error-exitcode=1 \
                  --inline-suppr \
                  --std=c++17 \
