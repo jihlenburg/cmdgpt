@@ -1,0 +1,28 @@
+# CmdGPT cppcheck suppressions file
+# This file contains suppressions for cppcheck warnings that are not relevant
+# or are style preferences rather than actual issues
+
+# System headers we don't control
+missingIncludeSystem
+
+# False positives from macro usage
+unknownMacro
+unmatchedSuppression
+
+# Not all headers are always available during analysis
+missingInclude
+
+# Internal cppcheck report
+checkersReport
+
+# Functions may be used in other translation units or are entry points
+unusedFunction
+
+# Style preferences - using STL algorithms isn't always clearer
+useStlAlgorithm
+
+# Struct members may be reserved for future use or documentation
+unusedStructMember
+
+# Test assertions that verify enum values are meant to be always true
+knownConditionTrueFalse

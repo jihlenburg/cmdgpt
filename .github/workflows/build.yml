@@ -133,29 +133,11 @@ jobs:
     # Run static analysis with cppcheck
     - name: Run cppcheck
       run: |
-        cppcheck --enable=all \
-                 --suppress=missingIncludeSystem \
-                 --suppress=unmatchedSuppression \
-                 --suppress=missingInclude \
-                 --suppress=checkersReport \
-                 --suppress=unusedFunction \
-                 --suppress=unknownMacro \
-                 --suppress=useStlAlgorithm \
-                 --suppress=unusedStructMember \
-                 --suppress=knownConditionTrueFalse \
-                 --error-exitcode=1 \
-                 --inline-suppr \
-                 --std=c++17 \
-                 --language=c++ \
-                 -I. \
-                 cmdgpt.cpp cmdgpt.h main.cpp tests/cmdgpt_tests.cpp
+        chmod +x scripts/run_cppcheck.sh
+        ./scripts/run_cppcheck.sh
     
     # Verify code formatting matches .clang-format rules
     - name: Check formatting
       run: |
-        # Find all C++ source files (excluding build directory and .github)
-        find . -name "*.cpp" -o -name "*.h" | grep -v build | grep -v ".github" | while read file; do
-          echo "Checking $file"
-          # --dry-run: don't modify files, --Werror: treat warnings as errors
-          clang-format-14 --dry-run --Werror "$file" || exit 1
-        done
+        chmod +x scripts/run_clang_format.sh
+        ./scripts/run_clang_format.sh --check
