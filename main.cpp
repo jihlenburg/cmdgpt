@@ -103,7 +103,8 @@ int main(int argc, const char* const argv[])
         }
         else if (arg == "--stream")
         {
-            streaming_mode = true;
+            // Streaming mode not yet implemented
+            std::cerr << "Warning: Streaming mode is not yet implemented" << std::endl;
         }
         else if (arg == "-f" || arg == "--format")
         {
