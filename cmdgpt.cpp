@@ -1519,6 +1519,7 @@ std::string cmdgpt::get_gpt_chat_response_with_retry(const Conversation& convers
 #include <iomanip>
 #include <sstream>
 #include <ctime>
+#include <cctype>
 
 /**
  * @brief ResponseCache constructor
@@ -1541,8 +1542,14 @@ cmdgpt::ResponseCache::ResponseCache(const std::filesystem::path& cache_dir, siz
         cache_dir_ = cache_dir;
     }
 
-    // Create cache directory if it doesn't exist
+    // Create cache directory if it doesn't exist with secure permissions
     std::filesystem::create_directories(cache_dir_);
+    
+    // Set secure permissions (owner read/write/execute only)
+    std::filesystem::permissions(cache_dir_,
+        std::filesystem::perms::owner_all |
+        std::filesystem::perms::group_all | std::filesystem::perms::others_all,
+        std::filesystem::perm_options::remove);
 }
 
 /**
@@ -1573,7 +1580,25 @@ std::string cmdgpt::ResponseCache::generate_key(std::string_view prompt, std::st
  */
 std::filesystem::path cmdgpt::ResponseCache::get_cache_path(const std::string& key) const
 {
-    return cache_dir_ / (key + ".json");
+    // Validate key contains only hex characters (SHA256 output)
+    for (char c : key)
+    {
+        if (!std::isxdigit(c))
+        {
+            throw ValidationException("Invalid cache key format");
+        }
+    }
+    
+    // Ensure we stay within cache directory
+    auto cache_file = cache_dir_ / (key + ".json");
+    auto cache_file_str = cache_file.string();
+    auto cache_dir_str = cache_dir_.string();
+    if (cache_file_str.find(cache_dir_str) != 0)
+    {
+        throw SecurityException("Cache path escape attempt detected");
+    }
+    
+    return cache_file;
 }
 
 /**
@@ -1645,6 +1670,28 @@ std::string cmdgpt::ResponseCache::get(const std::string& key) const
  */
 void cmdgpt::ResponseCache::put(const std::string& key, std::string_view response)
 {
+    // Check cache size before adding new entry
+    auto stats = get_stats();
+    if (stats["count"] >= MAX_CACHE_ENTRIES)
+    {
+        gLogger->info("Cache full, cleaning expired entries");
+        clean_expired();
+        
+        // If still too many entries, don't cache
+        stats = get_stats();
+        if (stats["count"] >= MAX_CACHE_ENTRIES)
+        {
+            gLogger->warn("Cache at maximum capacity, skipping cache write");
+            return;
+        }
+    }
+    
+    if (stats["size_bytes"] > MAX_CACHE_SIZE_MB * 1024 * 1024)
+    {
+        gLogger->warn("Cache size limit exceeded, skipping cache write");
+        return;
+    }
+    
     auto path = get_cache_path(key);
     
     try
@@ -1655,10 +1702,16 @@ void cmdgpt::ResponseCache::put(const std::string& key, std::string_view respons
         cache_data["timestamp"] = std::time(nullptr);
         cache_data["version"] = VERSION;
         
-        std::ofstream file(path);
+        // Write atomically to prevent partial writes
+        auto temp_path = path.string() + ".tmp";
+        std::ofstream file(temp_path);
         if (file.is_open())
         {
             file << cache_data.dump(2);
+            file.close();
+            
+            // Atomic rename
+            std::filesystem::rename(temp_path, path);
             gLogger->debug("Cached response with key: {}", key);
         }
     }

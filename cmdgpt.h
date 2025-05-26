@@ -120,6 +120,8 @@ inline constexpr size_t MAX_RESPONSE_LENGTH = 10 * 1024 * 1024; ///< Maximum res
 inline constexpr size_t MAX_API_KEY_LENGTH = 256;               ///< Maximum API key length
 inline constexpr int CONNECTION_TIMEOUT_SECONDS = 30;           ///< Connection timeout in seconds
 inline constexpr int READ_TIMEOUT_SECONDS = 60;                 ///< Read timeout in seconds
+inline constexpr size_t MAX_CACHE_SIZE_MB = 100;                ///< Maximum cache size in MB
+inline constexpr size_t MAX_CACHE_ENTRIES = 1000;               ///< Maximum number of cache entries
 /// @}
 
 /**
@@ -269,6 +271,24 @@ class ValidationException : public CmdGptException
   public:
     explicit ValidationException(const std::string& message)
         : CmdGptException("Validation Error: " + message)
+    {
+    }
+};
+
+/**
+ * @brief Exception for security violations
+ *
+ * Thrown when potential security issues are detected, including:
+ * - Path traversal attempts
+ * - Suspicious input patterns
+ * - Permission violations
+ * - Cache tampering attempts
+ */
+class SecurityException : public CmdGptException
+{
+  public:
+    explicit SecurityException(const std::string& message)
+        : CmdGptException("Security Error: " + message)
     {
     }
 };
