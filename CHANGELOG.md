@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2025-05-26
+
+### Fixed
+- CI build failures due to shadow variable warnings
+- Missing `streaming_mode` variable declaration in main.cpp
+- String initialization consistency (changed from `std::string{}` to `std::string()`)
+
+### Changed
+- Centralized code quality tooling in scripts directory
+- Improved `.gitignore` to exclude temporary files and build artifacts
+
+### Removed
+- Unnecessary temporary files (BATCH1_SUMMARY.md, build 2/, etc.)
+
 ## [0.4.0] - 2025-05-26
 
 ### Added
