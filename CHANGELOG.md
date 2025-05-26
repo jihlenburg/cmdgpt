@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - 2025-05-26
 
 ### Added
 - Rate limiting system to prevent API overload
@@ -17,20 +17,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Thread pool with queue size of 8192
   - Non-blocking I/O prevents delays on TRACE level
   - Flush only on errors for better performance
-
-### Security
-- Enhanced path traversal protection using canonical path resolution
-- Fail-fast on insecure cache directory permissions
-- Improved thread safety in rate limiter implementation
-
-### Fixed
-- Concurrent request timeout issues
-- TRACE level logging performance problems
-- Config file processing delays
-
-## [0.5.0] - 2025-05-26
-
-### Added
 - Response caching system to avoid duplicate API calls
   - SHA256-based cache keys for secure and consistent hashing
   - 24-hour default cache expiration
@@ -66,6 +52,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - API key security audit and improved handling
 
 ### Security
+- Enhanced path traversal protection using canonical path resolution
+- Fail-fast on insecure cache directory permissions
+- Improved thread safety in rate limiter implementation
 - Fixed potential path traversal vulnerability in cache file operations
 - Added secure file permissions for cache directory and history
 - Implemented cache size limits to prevent disk exhaustion attacks
@@ -79,6 +68,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated help text with comprehensive feature documentation
 
 ### Fixed
+- Concurrent request timeout issues
+- TRACE level logging performance problems
+- Config file processing delays
 - Code quality issues identified by static analysis
 - Variable shadowing in template display code
 - Type conversion warnings in history loading
