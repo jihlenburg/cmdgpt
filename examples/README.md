@@ -53,6 +53,16 @@ Hello, world!
 How are you today?
 The weather is nice.
 EOF
+
+# NEW in v0.4.1: Combined stdin + prompt for powerful context processing
+# Git log summarization
+git log --oneline -10 | ./cmdgpt "summarize these commits in 3 bullets"
+
+# API response processing
+curl -s api.example.com/data.json | ./cmdgpt "extract all email addresses"
+
+# Error log analysis
+cat /var/log/app.log | ./cmdgpt "identify the root cause of errors"
 ```
 
 ### interactive_session.sh

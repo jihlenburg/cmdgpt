@@ -77,8 +77,37 @@ rm -f /tmp/file_check.sh
 echo
 echo "---"
 
+# Example 6: Combined stdin + prompt (NEW in v0.4.1)
+echo "6. COMBINED STDIN + PROMPT"
+echo "Git log analysis:"
+echo "Command: git log --oneline -10 | cmdgpt 'summarize these commits in 3 bullets'"
+echo "Response:"
+git log --oneline -10 | $CMDGPT "summarize these commits in 3 bullets"
+echo
+echo "---"
+
+# Example 7: API data processing
+echo "7. API DATA PROCESSING"
+echo "Creating sample JSON data..."
+cat > /tmp/sample_data.json << 'EOF'
+{
+  "users": [
+    {"name": "Alice", "age": 30, "email": "alice@example.com"},
+    {"name": "Bob", "age": 25, "email": "bob@example.com"},
+    {"name": "Charlie", "age": 35, "email": "charlie@example.com"}
+  ]
+}
+EOF
+
+echo "Processing JSON data:"
+cat /tmp/sample_data.json | $CMDGPT "extract all email addresses from this JSON"
+rm -f /tmp/sample_data.json
+echo
+echo "---"
+
 echo "Tips for pipe integration:"
 echo "  - cmdgpt automatically detects pipe vs terminal input"
 echo "  - Multi-line input is fully supported"
 echo "  - Use -f code to extract just code from responses"
 echo "  - Combine with grep, awk, sed for powerful workflows"
+echo "  - NEW: Combine piped data with prompts for context-aware processing"

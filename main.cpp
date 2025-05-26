@@ -271,35 +271,53 @@ int main(int argc, const char* const argv[])
         return EX_CONFIG;
     }
 
-    // Get prompt from stdin if not provided
-    if (prompt.empty())
+    /**
+     * Input handling supports three modes:
+     * 1. Command-line prompt only: ./cmdgpt "prompt"
+     * 2. Stdin only: echo "prompt" | ./cmdgpt
+     * 3. Combined mode: command | ./cmdgpt "instruction"
+     *    In this mode, stdin provides context and the command-line argument
+     *    provides the instruction to apply to that context.
+     */
+
+    // Check if there's input from stdin (pipe or file)
+    std::string stdin_input;
+    if (!isatty(fileno(stdin)))
     {
-        // Check if stdin is a terminal or pipe/file
-        if (isatty(fileno(stdin)))
+        // Reading from pipe or file - read all input
+        std::string line;
+        while (std::getline(std::cin, line))
         {
-            // Interactive terminal - require a prompt
-            std::cerr << "Error: No prompt provided" << std::endl;
-            std::cerr << "Usage: " << argv[0] << " [options] \"prompt\"" << std::endl;
-            std::cerr << "   or: echo \"prompt\" | " << argv[0] << " [options]" << std::endl;
-            return EX_USAGE;
+            if (!stdin_input.empty())
+                stdin_input += "\n";
+            stdin_input += line;
+        }
+    }
+
+    // Combine stdin input with command-line prompt if both exist
+    if (!stdin_input.empty())
+    {
+        if (!prompt.empty())
+        {
+            // Both stdin and command-line prompt exist
+            // Format: stdin content + newlines + command prompt
+            // This enables powerful usage like: git log | cmdgpt "summarize"
+            prompt = stdin_input + "\n\n" + prompt;
         }
         else
         {
-            // Reading from pipe or file - read all input
-            std::string line;
-            while (std::getline(std::cin, line))
-            {
-                if (!prompt.empty())
-                    prompt += "\n";
-                prompt += line;
-            }
-
-            if (prompt.empty())
-            {
-                std::cerr << "Error: No input received from stdin" << std::endl;
-                return EX_USAGE;
-            }
+            // Only stdin input exists
+            prompt = stdin_input;
         }
+    }
+    else if (prompt.empty())
+    {
+        // No input from either source
+        std::cerr << "Error: No prompt provided" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " [options] \"prompt\"" << std::endl;
+        std::cerr << "   or: echo \"prompt\" | " << argv[0] << " [options]" << std::endl;
+        std::cerr << "   or: command | " << argv[0] << " \"instruction\"" << std::endl;
+        return EX_USAGE;
     }
 
     // Make the API request and handle the response

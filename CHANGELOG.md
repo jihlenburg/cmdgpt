@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.4.1] - 2025-05-26
 
+### Added
+- Combined stdin and command-line prompt support for powerful command chaining
+  - Example: `git log | cmdgpt "summarize in 5 bullets"`
+  - Stdin provides context, command-line argument provides instruction
+
 ### Fixed
 - CI build failures due to shadow variable warnings
 - Missing `streaming_mode` variable declaration in main.cpp
@@ -15,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Centralized code quality tooling in scripts directory
 - Improved `.gitignore` to exclude temporary files and build artifacts
+- Enhanced input handling to support three modes: stdin-only, prompt-only, or combined
 
 ### Removed
 - Unnecessary temporary files (BATCH1_SUMMARY.md, build 2/, etc.)

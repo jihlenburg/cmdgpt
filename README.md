@@ -2,7 +2,7 @@
 
 [![Build and Test](https://github.com/jihlenburg/cmdgpt/actions/workflows/build.yml/badge.svg)](https://github.com/jihlenburg/cmdgpt/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.1-blue.svg)](CHANGELOG.md)
 
 CmdGPT is a command-line interface (CLI) tool designed to interact with the OpenAI GPT API. It enables users to send prompts and receive responses from GPT models directly from the terminal.
 
@@ -25,6 +25,7 @@ CmdGPT is a command-line interface (CLI) tool designed to interact with the Open
 - 💾 Automatic conversation recovery after errors
 - 🐚 Enhanced shell integration with completion scripts
 - 📥 Multi-line input support from pipes and files
+- 🔗 Combined stdin and prompt support for powerful command chaining
 
 ## Prerequisites
 
@@ -162,6 +163,11 @@ echo "Translate to Spanish: Hello, world!" | ./cmdgpt
 
 # Multi-line input from a file
 cat my_code.py | ./cmdgpt "Review this Python code"
+
+# Combine piped input with a prompt (NEW in v0.4.1)
+git log --oneline -10 | ./cmdgpt "summarize these commits in 3 bullets"
+curl -s api.example.com/data.json | ./cmdgpt "extract all email addresses"
+cat error.log | ./cmdgpt "find the root cause of these errors"
 
 # Use with shell scripting
 RESPONSE=$(./cmdgpt "Generate a random UUID")
