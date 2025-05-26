@@ -3,7 +3,7 @@
  * @brief Command-line interface for OpenAI GPT API
  * @author Joern Ihlenburg
  * @date 2023-2024
- * @version 0.4.2
+ * @version 0.5.0-dev
  *
  * This file contains the main API declarations for cmdgpt, a command-line
  * tool for interacting with OpenAI's GPT models. It provides features including:
@@ -45,15 +45,22 @@ SOFTWARE.
 #define CMDGPT_H
 
 #include "spdlog/spdlog.h"
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <deque>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
+#include <optional>
+#include <queue>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 /**
@@ -72,7 +79,7 @@ namespace cmdgpt
 {
 
 /// @brief Current version of cmdgpt
-inline constexpr std::string_view VERSION = "v0.4.2";
+inline constexpr std::string_view VERSION = "v0.5.0";
 
 /// @name Default Configuration Values
 /// @{
@@ -119,6 +126,8 @@ inline constexpr size_t MAX_RESPONSE_LENGTH = 10 * 1024 * 1024; ///< Maximum res
 inline constexpr size_t MAX_API_KEY_LENGTH = 256;               ///< Maximum API key length
 inline constexpr int CONNECTION_TIMEOUT_SECONDS = 30;           ///< Connection timeout in seconds
 inline constexpr int READ_TIMEOUT_SECONDS = 60;                 ///< Read timeout in seconds
+inline constexpr size_t MAX_CACHE_SIZE_MB = 100;                ///< Maximum cache size in MB
+inline constexpr size_t MAX_CACHE_ENTRIES = 1000;               ///< Maximum number of cache entries
 /// @}
 
 /**
@@ -273,6 +282,28 @@ class ValidationException : public CmdGptException
 };
 
 /**
+ * @brief Exception for security violations
+ *
+ * Thrown when potential security issues are detected, including:
+ * - Path traversal attempts
+ * - Suspicious input patterns
+ * - Permission violations
+ * - Cache tampering attempts
+ * - Invalid or malicious input that could compromise system security
+ *
+ * This exception indicates a serious security concern that should be
+ * logged and handled appropriately to prevent potential exploits.
+ */
+class SecurityException : public CmdGptException
+{
+  public:
+    explicit SecurityException(const std::string& message)
+        : CmdGptException("Security Error: " + message)
+    {
+    }
+};
+
+/**
  * @brief Configuration management class using modern C++ features
  */
 class Config
@@ -367,6 +398,22 @@ class Config
     }
 
     /**
+     * @brief Set custom API endpoint
+     * @param endpoint Full URL to custom API endpoint
+     * @throws ValidationException if URL is invalid
+     */
+    void set_endpoint(std::string_view endpoint);
+
+    /**
+     * @brief Get configured API endpoint
+     * @return Custom endpoint URL or empty string for default
+     */
+    const std::string& endpoint() const noexcept
+    {
+        return endpoint_;
+    }
+
+    /**
      * @brief Enable or disable streaming mode
      * @param enable True to enable streaming, false to disable
      */
@@ -382,6 +429,52 @@ class Config
     bool streaming_mode() const noexcept
     {
         return streaming_mode_;
+    }
+
+    /**
+     * @brief Enable or disable response caching
+     *
+     * When enabled, API responses are cached to disk to avoid redundant
+     * API calls for identical requests.
+     *
+     * @param enable True to enable caching, false to disable
+     */
+    void set_cache_enabled(bool enable) noexcept
+    {
+        cache_enabled_ = enable;
+    }
+
+    /**
+     * @brief Check if response caching is enabled
+     *
+     * @return True if caching is enabled, false otherwise
+     */
+    bool cache_enabled() const noexcept
+    {
+        return cache_enabled_;
+    }
+
+    /**
+     * @brief Enable or disable token usage display
+     *
+     * When enabled, token count and estimated cost are displayed
+     * after each API response.
+     *
+     * @param enable True to show token usage, false to hide
+     */
+    void set_show_tokens(bool enable) noexcept
+    {
+        show_tokens_ = enable;
+    }
+
+    /**
+     * @brief Check if token usage display is enabled
+     *
+     * @return True if token usage should be shown, false otherwise
+     */
+    bool show_tokens() const noexcept
+    {
+        return show_tokens_;
     }
 
     /**
@@ -403,12 +496,15 @@ class Config
     void validate() const;
 
   private:
-    std::string api_key_;                                    ///< OpenAI API key for authentication
-    std::string system_prompt_{DEFAULT_SYSTEM_PROMPT};       ///< System prompt to set AI behavior
-    std::string model_{DEFAULT_MODEL};                       ///< OpenAI model name (e.g., "gpt-4")
-    std::string log_file_{"logfile.txt"};                    ///< Path to debug log file
+    std::string api_key_;                              ///< OpenAI API key for authentication
+    std::string system_prompt_{DEFAULT_SYSTEM_PROMPT}; ///< System prompt to set AI behavior
+    std::string model_{DEFAULT_MODEL};                 ///< OpenAI model name (e.g., "gpt-4")
+    std::string log_file_{"logfile.txt"};              ///< Path to debug log file
+    std::string endpoint_;                             ///< Custom API endpoint (empty = default)
     spdlog::level::level_enum log_level_{DEFAULT_LOG_LEVEL}; ///< Logging verbosity level
     bool streaming_mode_{false};                             ///< Whether to stream responses
+    bool cache_enabled_{true};                               ///< Whether to use response cache
+    bool show_tokens_{false};                                ///< Whether to display token usage
 };
 
 /**
@@ -511,6 +607,240 @@ class Conversation
     std::vector<Message> messages_;                      ///< Ordered list of conversation messages
     static constexpr size_t MAX_CONTEXT_LENGTH = 100000; ///< Maximum context length (~25k tokens)
 };
+
+/**
+ * @brief Token usage information from API response
+ *
+ * Tracks the number of tokens consumed by an API request and calculates
+ * the estimated cost based on the model's pricing.
+ */
+struct TokenUsage
+{
+    size_t prompt_tokens = 0;     ///< Number of tokens in the input prompt
+    size_t completion_tokens = 0; ///< Number of tokens in the generated completion
+    size_t total_tokens = 0;      ///< Total tokens used (prompt + completion)
+    double estimated_cost = 0.0;  ///< Estimated cost in USD based on model pricing
+};
+
+/**
+ * @brief Complete API response including content and metadata
+ *
+ * Encapsulates the full response from the API including the text content,
+ * token usage statistics, and cache status.
+ */
+struct ApiResponse
+{
+    std::string content;    ///< The actual response text from the API
+    TokenUsage token_usage; ///< Token usage and cost information for this request
+    bool from_cache =
+        false; ///< Whether this response was retrieved from cache (true) or API (false)
+};
+
+/**
+ * @brief Response history manager
+ *
+ * Maintains a persistent history of all API requests and responses.
+ * History is stored in JSON format for easy parsing and analysis.
+ *
+ * Features:
+ * - Automatic persistence to ~/.cmdgpt/history.json
+ * - Optional size limits to prevent unbounded growth
+ * - Search and filter capabilities
+ * - Export functionality
+ */
+class ResponseHistory
+{
+  public:
+    /// History entry representing a single request/response pair
+    struct Entry
+    {
+        std::string timestamp;  ///< ISO 8601 timestamp
+        std::string prompt;     ///< User's prompt
+        std::string response;   ///< API response
+        std::string model;      ///< Model used
+        TokenUsage token_usage; ///< Token usage statistics
+        bool from_cache;        ///< Whether response was from cache
+    };
+
+    /**
+     * @brief Construct a ResponseHistory
+     * @param history_file Path to history file (empty = default)
+     * @param max_entries Maximum entries to keep (0 = unlimited)
+     */
+    explicit ResponseHistory(const std::filesystem::path& history_file = "",
+                             size_t max_entries = 1000);
+
+    /**
+     * @brief Add an entry to the history
+     * @param prompt The user's prompt
+     * @param response The API response
+     * @param model The model used
+     * @param usage Token usage information
+     * @param from_cache Whether response was from cache
+     */
+    void add_entry(std::string_view prompt, std::string_view response, std::string_view model,
+                   const TokenUsage& usage, bool from_cache);
+
+    /**
+     * @brief Get recent history entries
+     * @param count Number of recent entries to retrieve
+     * @return Vector of history entries
+     */
+    std::vector<Entry> get_recent(size_t count = 10) const;
+
+    /**
+     * @brief Search history by prompt content
+     * @param query Search query (substring match)
+     * @return Vector of matching entries
+     */
+    std::vector<Entry> search(std::string_view query) const;
+
+    /**
+     * @brief Clear all history
+     * @return Number of entries cleared
+     */
+    size_t clear();
+
+    /**
+     * @brief Get total number of entries
+     * @return Entry count
+     */
+    size_t size() const noexcept
+    {
+        return entries_.size();
+    }
+
+    /**
+     * @brief Save history to file
+     * @throws std::runtime_error if save fails
+     */
+    void save() const;
+
+    /**
+     * @brief Load history from file
+     * @throws std::runtime_error if load fails
+     */
+    void load();
+
+  private:
+    std::filesystem::path history_file_; ///< Path to history file
+    std::vector<Entry> entries_;         ///< History entries
+    size_t max_entries_;                 ///< Maximum entries to keep
+    mutable std::mutex mutex_;           ///< Thread safety
+};
+
+/**
+ * @brief Get singleton ResponseHistory instance
+ * @return Reference to global ResponseHistory
+ */
+ResponseHistory& get_response_history();
+
+/**
+ * @brief Template manager for reusable prompts
+ *
+ * Manages a collection of prompt templates that can be saved and reused.
+ * Templates support variable substitution using {{variable}} syntax.
+ *
+ * Features:
+ * - Save frequently used prompts as templates
+ * - Variable substitution for dynamic content
+ * - Persistent storage in ~/.cmdgpt/templates.json
+ * - Built-in templates for common tasks
+ */
+class TemplateManager
+{
+  public:
+    /**
+     * @brief Template entry
+     */
+    struct Template
+    {
+        std::string name;                   ///< Template name/identifier
+        std::string description;            ///< Human-readable description
+        std::string content;                ///< Template content with {{variables}}
+        std::vector<std::string> variables; ///< List of variable names
+    };
+
+    /**
+     * @brief Construct a TemplateManager
+     * @param template_file Path to template file (empty = default)
+     */
+    explicit TemplateManager(const std::filesystem::path& template_file = "");
+
+    /**
+     * @brief Add or update a template
+     * @param name Template name
+     * @param description Template description
+     * @param content Template content with {{variables}}
+     */
+    void add_template(std::string_view name, std::string_view description,
+                      std::string_view content);
+
+    /**
+     * @brief Get a template by name
+     * @param name Template name
+     * @return Template if found, nullopt otherwise
+     */
+    std::optional<Template> get_template(std::string_view name) const;
+
+    /**
+     * @brief Remove a template
+     * @param name Template name
+     * @return true if template was removed, false if not found
+     */
+    bool remove_template(std::string_view name);
+
+    /**
+     * @brief List all templates
+     * @return Vector of all templates
+     */
+    std::vector<Template> list_templates() const;
+
+    /**
+     * @brief Apply template with variable substitution
+     * @param name Template name
+     * @param variables Map of variable name to value
+     * @return Expanded template content
+     * @throws std::runtime_error if template not found or variables missing
+     */
+    std::string apply_template(std::string_view name,
+                               const std::map<std::string, std::string>& variables) const;
+
+    /**
+     * @brief Save templates to file
+     * @throws std::runtime_error if save fails
+     */
+    void save() const;
+
+    /**
+     * @brief Load templates from file
+     * @throws std::runtime_error if load fails
+     */
+    void load();
+
+  private:
+    std::filesystem::path template_file_;       ///< Path to template file
+    std::map<std::string, Template> templates_; ///< Template collection
+    mutable std::mutex mutex_;                  ///< Thread safety
+
+    /**
+     * @brief Extract variable names from template content
+     * @param content Template content
+     * @return Vector of variable names found
+     */
+    static std::vector<std::string> extract_variables(std::string_view content);
+
+    /**
+     * @brief Initialize built-in templates
+     */
+    void init_builtin_templates();
+};
+
+/**
+ * @brief Get singleton TemplateManager instance
+ * @return Reference to global TemplateManager
+ */
+TemplateManager& get_template_manager();
 
 /**
  * @brief Configuration file manager
@@ -734,6 +1064,175 @@ std::string get_gpt_chat_response_with_retry(std::string_view prompt, const Conf
  */
 std::string get_gpt_chat_response_with_retry(const Conversation& conversation, const Config& config,
                                              int max_retries = 3);
+
+// ============================================================================
+// Rate Limiting and Connection Management
+// ============================================================================
+
+/**
+ * @brief Thread-safe rate limiter for API requests
+ *
+ * Implements a token bucket algorithm to prevent overwhelming the API
+ * with too many concurrent requests. This helps avoid 429 rate limit errors
+ * and improves stability when multiple instances run simultaneously.
+ *
+ * Features:
+ * - Configurable requests per second limit
+ * - Thread-safe operation
+ * - Blocking wait when rate limit exceeded
+ */
+class RateLimiter
+{
+  public:
+    /**
+     * @brief Construct rate limiter with specified limit
+     * @param requests_per_second Maximum requests allowed per second
+     * @param burst_size Maximum burst capacity (default: same as requests_per_second)
+     */
+    explicit RateLimiter(double requests_per_second, size_t burst_size = 0);
+
+    /**
+     * @brief Acquire permission to make a request
+     *
+     * Blocks if rate limit is exceeded until a token becomes available.
+     * Thread-safe and fair (FIFO).
+     */
+    void acquire();
+
+    /**
+     * @brief Try to acquire permission without blocking
+     * @return true if acquired, false if would exceed rate limit
+     */
+    bool try_acquire();
+
+    /**
+     * @brief Get current available tokens
+     * @return Number of available tokens
+     */
+    size_t available_tokens() const;
+
+  private:
+    mutable std::mutex mutex_;                          ///< Protects all member variables
+    mutable std::condition_variable cv_;                ///< For blocking acquire
+    double tokens_;                                     ///< Current available tokens
+    double max_tokens_;                                 ///< Maximum token capacity
+    double refill_rate_;                                ///< Tokens per second
+    std::chrono::steady_clock::time_point last_refill_; ///< Last refill timestamp
+
+    /**
+     * @brief Refill tokens based on elapsed time
+     * @note Must be called with mutex locked
+     */
+    void refill();
+};
+
+/**
+ * @brief Get singleton RateLimiter instance
+ * @return Reference to global RateLimiter
+ */
+RateLimiter& get_rate_limiter();
+
+// ============================================================================
+// Cache Management
+// ============================================================================
+
+/**
+ * @brief Response cache for avoiding duplicate API calls
+ *
+ * Caches API responses to disk using a hash of the request parameters.
+ * Default cache location: ~/.cmdgpt/cache/
+ * Default expiration: 24 hours
+ */
+class ResponseCache
+{
+  public:
+    /**
+     * @brief Construct cache with custom directory and expiration
+     * @param cache_dir Directory to store cache files
+     * @param expiration_hours Hours before cache entries expire (default: 24)
+     */
+    explicit ResponseCache(const std::filesystem::path& cache_dir = "",
+                           size_t expiration_hours = 24);
+
+    /**
+     * @brief Generate cache key from request parameters
+     * @param prompt User prompt
+     * @param model Model name
+     * @param system_prompt System prompt
+     * @return SHA256 hash as hex string
+     */
+    std::string generate_key(std::string_view prompt, std::string_view model,
+                             std::string_view system_prompt) const;
+
+    /**
+     * @brief Check if a valid cache entry exists
+     * @param key Cache key
+     * @return true if valid cache exists, false otherwise
+     */
+    bool has_valid_cache(const std::string& key) const;
+
+    /**
+     * @brief Retrieve cached response
+     * @param key Cache key
+     * @return Cached response or empty string if not found
+     */
+    std::string get(const std::string& key) const;
+
+    /**
+     * @brief Store response in cache
+     * @param key Cache key
+     * @param response Response to cache
+     */
+    void put(const std::string& key, std::string_view response);
+
+    /**
+     * @brief Clear all cache entries
+     * @return Number of entries cleared
+     */
+    size_t clear();
+
+    /**
+     * @brief Clean expired cache entries
+     * @return Number of entries removed
+     */
+    size_t clean_expired();
+
+    /**
+     * @brief Get cache statistics
+     * @return Map of statistics (size, count, hits, misses)
+     */
+    std::map<std::string, size_t> get_stats() const;
+
+  private:
+    std::filesystem::path cache_dir_;
+    size_t expiration_hours_;
+    mutable size_t cache_hits_ = 0;
+    mutable size_t cache_misses_ = 0;
+
+    std::filesystem::path get_cache_path(const std::string& key) const;
+    bool is_expired(const std::filesystem::path& path) const;
+};
+
+/**
+ * @brief Get or create the global response cache instance
+ * @return Reference to the global cache
+ */
+ResponseCache& get_response_cache();
+
+/**
+ * @brief Parse token usage from API response
+ * @param response_json JSON response from API
+ * @param model Model name for cost calculation
+ * @return TokenUsage struct with parsed values
+ */
+TokenUsage parse_token_usage(const std::string& response_json, std::string_view model);
+
+/**
+ * @brief Format token usage for display
+ * @param usage Token usage information
+ * @return Formatted string for display
+ */
+std::string format_token_usage(const TokenUsage& usage);
 
 } // namespace cmdgpt
 

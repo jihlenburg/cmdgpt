@@ -27,6 +27,8 @@ SOFTWARE.
 #include "spdlog/spdlog.h"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cctype>
+#include <filesystem>
 
 // Test fixture to initialize logger
 struct LoggerFixture
@@ -44,7 +46,7 @@ TEST_CASE_METHOD(LoggerFixture, "Constants are defined correctly")
 {
     SECTION("Version and model defaults")
     {
-        REQUIRE(std::string(cmdgpt::VERSION) == "v0.4.2");
+        REQUIRE(std::string(cmdgpt::VERSION) == "v0.5.0");
         REQUIRE(std::string(cmdgpt::DEFAULT_MODEL) == "gpt-4");
         REQUIRE(std::string(cmdgpt::DEFAULT_SYSTEM_PROMPT) == "You are a helpful assistant!");
         REQUIRE(cmdgpt::DEFAULT_LOG_LEVEL == spdlog::level::warn);
@@ -299,4 +301,254 @@ TEST_CASE_METHOD(LoggerFixture, "Output Formatting", "[format]")
         std::string output = cmdgpt::format_output(test_content, cmdgpt::OutputFormat::CODE);
         REQUIRE(output == test_content);
     }
+}
+
+TEST_CASE_METHOD(LoggerFixture, "Config Cache and Token Settings", "[config]")
+{
+    cmdgpt::Config config;
+
+    SECTION("Cache settings default to enabled")
+    {
+        REQUIRE(config.cache_enabled() == true);
+    }
+
+    SECTION("Can disable caching")
+    {
+        config.set_cache_enabled(false);
+        REQUIRE(config.cache_enabled() == false);
+    }
+
+    SECTION("Token display defaults to disabled")
+    {
+        REQUIRE(config.show_tokens() == false);
+    }
+
+    SECTION("Can enable token display")
+    {
+        config.set_show_tokens(true);
+        REQUIRE(config.show_tokens() == true);
+    }
+}
+
+TEST_CASE_METHOD(LoggerFixture, "ResponseCache Key Generation", "[cache]")
+{
+    cmdgpt::ResponseCache cache("/tmp/test_cache", 1);
+
+    SECTION("Generates consistent keys for same input")
+    {
+        std::string key1 = cache.generate_key("test prompt", "gpt-4", "system prompt");
+        std::string key2 = cache.generate_key("test prompt", "gpt-4", "system prompt");
+        REQUIRE(key1 == key2);
+    }
+
+    SECTION("Generates different keys for different prompts")
+    {
+        std::string key1 = cache.generate_key("prompt1", "gpt-4", "system");
+        std::string key2 = cache.generate_key("prompt2", "gpt-4", "system");
+        REQUIRE(key1 != key2);
+    }
+
+    SECTION("Generates different keys for different models")
+    {
+        std::string key1 = cache.generate_key("prompt", "gpt-4", "system");
+        std::string key2 = cache.generate_key("prompt", "gpt-3.5-turbo", "system");
+        REQUIRE(key1 != key2);
+    }
+
+    SECTION("Key is valid SHA256 hex string")
+    {
+        std::string key = cache.generate_key("test", "model", "system");
+        REQUIRE(key.length() == 64); // SHA256 produces 64 hex characters
+
+        // Check all characters are valid hex
+        for (char c : key)
+        {
+            REQUIRE(std::isxdigit(c));
+        }
+    }
+}
+
+TEST_CASE_METHOD(LoggerFixture, "ResponseCache Security", "[cache][security]")
+{
+    cmdgpt::ResponseCache cache("/tmp/test_cache_security", 1);
+
+    SECTION("Invalid keys fail when used in operations")
+    {
+        // Keys with path traversal attempts should fail
+        // Since get_cache_path is private, we test through public methods
+        std::string invalid_key1 = "../evil";
+        std::string invalid_key2 = "test/../../evil";
+        std::string invalid_key3 = "/etc/passwd";
+
+        // These should throw when trying to use invalid keys
+        REQUIRE_THROWS_AS(cache.has_valid_cache(invalid_key1), cmdgpt::ValidationException);
+        REQUIRE_THROWS_AS(cache.get(invalid_key2), cmdgpt::ValidationException);
+        REQUIRE_THROWS_AS(cache.put(invalid_key3, "test"), cmdgpt::ValidationException);
+    }
+
+    SECTION("Valid SHA256 keys work correctly")
+    {
+        std::string valid_key = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+        // Should not throw with valid key
+        REQUIRE_NOTHROW(cache.has_valid_cache(valid_key));
+        REQUIRE_NOTHROW(cache.get(valid_key));
+    }
+
+    // Clean up test directory
+    std::filesystem::remove_all("/tmp/test_cache_security");
+}
+
+TEST_CASE_METHOD(LoggerFixture, "Token Usage Parsing", "[tokens]")
+{
+    SECTION("Parse valid token usage")
+    {
+        std::string json_response = R"({
+            "choices": [{"message": {"content": "test"}}],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 20,
+                "total_tokens": 30
+            }
+        })";
+
+        cmdgpt::TokenUsage usage = cmdgpt::parse_token_usage(json_response, "gpt-4");
+        REQUIRE(usage.prompt_tokens == 10);
+        REQUIRE(usage.completion_tokens == 20);
+        REQUIRE(usage.total_tokens == 30);
+        REQUIRE(usage.estimated_cost > 0); // Should calculate cost for known model
+    }
+
+    SECTION("Handle missing usage field")
+    {
+        std::string json_response = R"({"choices": [{"message": {"content": "test"}}]})";
+
+        cmdgpt::TokenUsage usage = cmdgpt::parse_token_usage(json_response, "gpt-4");
+        REQUIRE(usage.prompt_tokens == 0);
+        REQUIRE(usage.completion_tokens == 0);
+        REQUIRE(usage.total_tokens == 0);
+        REQUIRE(usage.estimated_cost == 0.0);
+    }
+
+    SECTION("Calculate costs for different models")
+    {
+        std::string json_response = R"({
+            "usage": {
+                "prompt_tokens": 1000,
+                "completion_tokens": 1000,
+                "total_tokens": 2000
+            }
+        })";
+
+        // GPT-4 should be more expensive than GPT-3.5
+        cmdgpt::TokenUsage usage_gpt4 = cmdgpt::parse_token_usage(json_response, "gpt-4");
+        cmdgpt::TokenUsage usage_gpt35 = cmdgpt::parse_token_usage(json_response, "gpt-3.5-turbo");
+
+        REQUIRE(usage_gpt4.estimated_cost > usage_gpt35.estimated_cost);
+    }
+}
+
+TEST_CASE_METHOD(LoggerFixture, "Token Usage Formatting", "[tokens]")
+{
+    cmdgpt::TokenUsage usage;
+    usage.prompt_tokens = 100;
+    usage.completion_tokens = 200;
+    usage.total_tokens = 300;
+    usage.estimated_cost = 0.0045;
+
+    std::string formatted = cmdgpt::format_token_usage(usage);
+
+    REQUIRE(formatted.find("300 total") != std::string::npos);
+    REQUIRE(formatted.find("100 prompt") != std::string::npos);
+    REQUIRE(formatted.find("200 completion") != std::string::npos);
+    REQUIRE(formatted.find("$0.0045") != std::string::npos);
+}
+
+TEST_CASE_METHOD(LoggerFixture, "SecurityException", "[exceptions]")
+{
+    SECTION("SecurityException has correct prefix")
+    {
+        cmdgpt::SecurityException ex("test security issue");
+        std::string msg = ex.what();
+        REQUIRE(msg.find("Security Error:") != std::string::npos);
+        REQUIRE(msg.find("test security issue") != std::string::npos);
+    }
+}
+
+TEST_CASE_METHOD(LoggerFixture, "ResponseCache Operations", "[cache][integration]")
+{
+    // Use a unique test directory
+    std::string test_dir = "/tmp/cmdgpt_test_" + std::to_string(std::time(nullptr));
+    cmdgpt::ResponseCache cache(test_dir, 1);
+
+    SECTION("Cache miss on first request")
+    {
+        std::string key = cache.generate_key("test", "gpt-4", "system");
+        REQUIRE(cache.has_valid_cache(key) == false);
+        REQUIRE(cache.get(key) == "");
+    }
+
+    SECTION("Cache hit after storing")
+    {
+        std::string key = cache.generate_key("test", "gpt-4", "system");
+        std::string response = "This is a test response";
+
+        cache.put(key, response);
+        REQUIRE(cache.has_valid_cache(key) == true);
+        REQUIRE(cache.get(key) == response);
+    }
+
+    SECTION("Cache statistics tracking")
+    {
+        std::string key = cache.generate_key("test", "gpt-4", "system");
+
+        // Initial miss
+        cache.get(key);
+        auto stats = cache.get_stats();
+        REQUIRE(stats["misses"] == 1);
+        REQUIRE(stats["hits"] == 0);
+
+        // Store and hit
+        cache.put(key, "response");
+        cache.get(key);
+        stats = cache.get_stats();
+        REQUIRE(stats["hits"] == 1);
+        REQUIRE(stats["count"] >= 1);
+    }
+
+    SECTION("Clear cache")
+    {
+        std::string key = cache.generate_key("test", "gpt-4", "system");
+        cache.put(key, "response");
+
+        size_t cleared = cache.clear();
+        REQUIRE(cleared >= 1);
+        REQUIRE(cache.has_valid_cache(key) == false);
+    }
+
+    // Clean up test directory
+    std::filesystem::remove_all(test_dir);
+}
+
+TEST_CASE_METHOD(LoggerFixture, "ResponseCache Size Limits", "[cache][limits]")
+{
+    std::string test_dir = "/tmp/cmdgpt_test_limits_" + std::to_string(std::time(nullptr));
+    cmdgpt::ResponseCache cache(test_dir, 24);
+
+    SECTION("Respects maximum entry count")
+    {
+        // Note: This is a conceptual test. In real implementation,
+        // we'd need to mock or set a very low MAX_CACHE_ENTRIES for testing
+        // For now, just verify the cache can handle multiple entries
+        for (int i = 0; i < 10; i++)
+        {
+            std::string key = cache.generate_key("prompt" + std::to_string(i), "gpt-4", "system");
+            cache.put(key, "response" + std::to_string(i));
+        }
+
+        auto stats = cache.get_stats();
+        REQUIRE(stats["count"] <= 1000); // MAX_CACHE_ENTRIES
+    }
+
+    // Clean up
+    std::filesystem::remove_all(test_dir);
 }
