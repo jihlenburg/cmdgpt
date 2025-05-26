@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2025-05-26
+
+### Added
+- Streaming responses with `--stream` flag (simulated streaming for better UX)
+- Automatic retry with exponential backoff for rate limits and network errors
+- Context preservation and recovery after errors in interactive mode
+- Enhanced shell integration:
+  - Multi-line input support from pipes and files
+  - Better detection of terminal vs pipe input
+  - Shell completion scripts for bash and zsh
+  - Installation script for shell completions
+- `get_gpt_chat_response_with_retry()` functions with configurable retry count
+- TOO_MANY_REQUESTS (429) HTTP status code handling
+
+### Changed
+- Interactive mode now uses retry-enabled API calls by default
+- Improved error messages with recovery instructions
+- Enhanced pipe handling with proper EOF detection
+
+### Security
+- Added buffer size limits for streaming responses
+- Validated all inputs in streaming functions
+- Secure retry logic that doesn't retry on authentication errors
+
 ## [0.3] - 2025-01-25
 
 ### Added

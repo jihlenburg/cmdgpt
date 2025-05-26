@@ -40,6 +40,7 @@ SOFTWARE.
 #include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/spdlog.h"
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
@@ -51,6 +52,7 @@ SOFTWARE.
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 using json = nlohmann::json;
 using namespace cmdgpt;
@@ -62,7 +64,7 @@ namespace fs = std::filesystem;
 
 /**
  * @brief Map of string log levels to spdlog::level::level_enum values
- * 
+ *
  * Used for parsing log level strings from environment variables and config files.
  * Supports standard log levels: TRACE, DEBUG, INFO, WARN, ERROR, CRITICAL.
  */
@@ -74,7 +76,7 @@ const std::map<std::string, spdlog::level::level_enum> log_levels = {
 
 /**
  * @brief Global logger instance for application-wide logging
- * 
+ *
  * Initialized based on configuration settings. Can write to file or console.
  * Thread-safe and supports multiple log levels for debugging.
  */
@@ -94,7 +96,7 @@ void cmdgpt::print_help()
               << "  -h, --help              Show this help message and exit\n"
               << "  -v, --version           Print the version of the program and exit\n"
               << "  -i, --interactive       Run in interactive mode (REPL)\n"
-              << "  --stream                Enable streaming responses (not yet implemented)\n"
+              << "  --stream                Enable streaming responses (simulated)\n"
               << "  -f, --format FORMAT     Output format: plain, markdown, json, code\n"
               << "  -k, --api_key KEY       Set the OpenAI API key to KEY\n"
               << "  -s, --sys_prompt PROMPT Set the system prompt to PROMPT\n"
@@ -258,7 +260,7 @@ void cmdgpt::Config::load_from_environment()
     // Load configuration from environment variables
     // Environment variables take precedence over defaults but not command-line args
     // This allows users to set defaults without modifying code or config files
-    
+
     // Load API key from environment if available
     // OPENAI_API_KEY is the standard environment variable for OpenAI API authentication
     if (const char* env_key = std::getenv("OPENAI_API_KEY"))
@@ -822,6 +824,378 @@ std::string cmdgpt::get_gpt_chat_response(const Conversation& conversation, cons
 }
 
 // ============================================================================
+// Retry Helper Functions
+// ============================================================================
+
+/**
+ * @brief Execute a function with exponential backoff retry logic
+ *
+ * @tparam Func The function type to execute
+ * @tparam Args The argument types for the function
+ * @param func The function to execute
+ * @param max_retries Maximum number of retry attempts
+ * @param initial_delay_ms Initial delay in milliseconds
+ * @param args Arguments to pass to the function
+ * @return The result of the function call
+ *
+ * @throws The last exception if all retries fail
+ *
+ * @note Retries on network errors and rate limits (429)
+ * @note Uses exponential backoff: delay doubles after each retry
+ * @note Maximum delay is capped at 30 seconds
+ */
+template <typename Func, typename... Args>
+auto retry_with_backoff(Func func, int max_retries, int initial_delay_ms, Args&&... args)
+    -> decltype(func(std::forward<Args>(args)...))
+{
+    int delay_ms = initial_delay_ms;
+    const int max_delay_ms = 30000; // 30 seconds max
+
+    for (int attempt = 0; attempt <= max_retries; ++attempt)
+    {
+        try
+        {
+            return func(std::forward<Args>(args)...);
+        }
+        catch (const cmdgpt::ApiException& e)
+        {
+            // Only retry on rate limits and server errors
+            if (e.status_code() != cmdgpt::HttpStatus::TOO_MANY_REQUESTS &&
+                e.status_code() != cmdgpt::HttpStatus::INTERNAL_SERVER_ERROR)
+            {
+                throw; // Don't retry client errors
+            }
+
+            if (attempt == max_retries)
+            {
+                throw; // Last attempt failed
+            }
+
+            gLogger->warn("Request failed (attempt {}/{}): {}. Retrying in {} ms...", attempt + 1,
+                          max_retries + 1, e.what(), delay_ms);
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+
+            // Exponential backoff with jitter
+            delay_ms = std::min(delay_ms * 2 + (rand() % 100), max_delay_ms);
+        }
+        catch (const cmdgpt::NetworkException& e)
+        {
+            if (attempt == max_retries)
+            {
+                throw; // Last attempt failed
+            }
+
+            gLogger->warn("Network error (attempt {}/{}): {}. Retrying in {} ms...", attempt + 1,
+                          max_retries + 1, e.what(), delay_ms);
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+
+            // Exponential backoff with jitter
+            delay_ms = std::min(delay_ms * 2 + (rand() % 100), max_delay_ms);
+        }
+    }
+
+    // Should never reach here
+    throw std::logic_error("Retry logic error");
+}
+
+// ============================================================================
+// Streaming Helper Functions
+// ============================================================================
+
+/**
+ * @brief Process a single Server-Sent Events (SSE) line from streaming response
+ *
+ * @param line The SSE line to process
+ * @param callback The callback to invoke with extracted content
+ * @return true if processing was successful, false otherwise
+ *
+ * @note SSE format: "data: {json}" or "data: [DONE]"
+ * @note This function is designed to be secure against malformed JSON
+ */
+static bool process_sse_line(const std::string& line, const cmdgpt::StreamCallback& callback)
+{
+    // Skip empty lines (SSE spec allows empty lines between events)
+    if (line.empty() || line == "\r")
+        return true;
+
+    // Check for SSE data prefix (6 chars: "data: ")
+    if (line.length() < 6 || line.substr(0, 6) != "data: ")
+        return true; // Not an error, just not a data line
+
+    std::string data_str = line.substr(6);
+
+    // Check for stream termination marker
+    if (data_str == "[DONE]")
+        return true;
+
+    try
+    {
+        // Parse JSON chunk with security considerations:
+        // - nlohmann::json throws on invalid JSON (prevents injection)
+        // - We only extract specific expected fields
+        json chunk_json = json::parse(data_str);
+
+        // Validate expected structure to prevent unexpected data processing
+        if (chunk_json.contains("choices") && chunk_json["choices"].is_array() &&
+            !chunk_json["choices"].empty())
+        {
+            const auto& choice = chunk_json["choices"][0];
+
+            // Check for delta content (streaming responses use "delta" not "message")
+            if (choice.contains("delta") && choice["delta"].is_object() &&
+                choice["delta"].contains("content") && choice["delta"]["content"].is_string())
+            {
+                std::string content = choice["delta"]["content"].get<std::string>();
+                if (!content.empty())
+                {
+                    callback(content);
+                }
+            }
+        }
+    }
+    catch (const json::exception& e)
+    {
+        // Log but don't throw - streaming can have partial/malformed chunks
+        gLogger->warn("Failed to parse streaming chunk: {}", e.what());
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * @brief Process streaming response data with buffering for partial lines
+ *
+ * @param data Raw data received from server
+ * @param data_length Length of the data
+ * @param buffer Persistent buffer for accumulating partial lines
+ * @param callback The callback to invoke with extracted content
+ *
+ * @note This function handles partial JSON objects that may span multiple chunks
+ * @note Security: Limits buffer size to prevent memory exhaustion attacks
+ */
+static void process_streaming_data(const char* data, size_t data_length, std::string& buffer,
+                                   const cmdgpt::StreamCallback& callback)
+{
+    // Security: Limit buffer size to prevent memory exhaustion
+    const size_t MAX_BUFFER_SIZE = 1024 * 1024; // 1MB max buffer
+
+    if (buffer.length() + data_length > MAX_BUFFER_SIZE)
+    {
+        gLogger->error("Streaming buffer size exceeded maximum allowed");
+        buffer.clear();
+        throw cmdgpt::ValidationException("Streaming response too large");
+    }
+
+    // Append new data to buffer
+    buffer.append(data, data_length);
+
+    // Process complete lines
+    size_t start = 0;
+    size_t pos;
+
+    while ((pos = buffer.find('\n', start)) != std::string::npos)
+    {
+        std::string line = buffer.substr(start, pos - start);
+        start = pos + 1;
+
+        process_sse_line(line, callback);
+    }
+
+    // Keep remaining partial line in buffer
+    if (start < buffer.length())
+    {
+        buffer = buffer.substr(start);
+    }
+    else
+    {
+        buffer.clear();
+    }
+}
+
+/**
+ * @brief Handle streaming API error responses
+ *
+ * @param status The HTTP status code
+ * @param body The response body (may contain error details)
+ *
+ * @throws ApiException with appropriate error message
+ */
+static void handle_streaming_error(cmdgpt::HttpStatus status, const std::string& body)
+{
+    std::string error_msg = "Unknown error";
+
+    // Try to extract error message from JSON response
+    try
+    {
+        if (!body.empty())
+        {
+            json error_json = json::parse(body);
+            if (error_json.contains("error") && error_json["error"].is_object() &&
+                error_json["error"].contains("message") &&
+                error_json["error"]["message"].is_string())
+            {
+                error_msg = error_json["error"]["message"].get<std::string>();
+            }
+        }
+    }
+    catch (...)
+    {
+        // If JSON parsing fails, use generic message
+    }
+
+    // Throw appropriate exception based on status code
+    switch (status)
+    {
+    case cmdgpt::HttpStatus::BAD_REQUEST:
+        throw cmdgpt::ApiException(status, "Bad request: " + error_msg);
+    case cmdgpt::HttpStatus::UNAUTHORIZED:
+        throw cmdgpt::ApiException(status, "Unauthorized - check your API key");
+    case cmdgpt::HttpStatus::FORBIDDEN:
+        throw cmdgpt::ApiException(status, "Forbidden - insufficient permissions");
+    case cmdgpt::HttpStatus::NOT_FOUND:
+        throw cmdgpt::ApiException(status, "API endpoint not found");
+    case cmdgpt::HttpStatus::TOO_MANY_REQUESTS:
+        throw cmdgpt::ApiException(status, "Rate limit exceeded - try again later");
+    case cmdgpt::HttpStatus::INTERNAL_SERVER_ERROR:
+        throw cmdgpt::ApiException(status, "OpenAI server error - try again later");
+    default:
+        throw cmdgpt::ApiException(
+            status, "HTTP error " + std::to_string(static_cast<int>(status)) + ": " + error_msg);
+    }
+}
+
+// ============================================================================
+// Streaming API Functions
+// ============================================================================
+
+/**
+ * @brief Send streaming chat request with prompt
+ *
+ * @param prompt The user's input prompt
+ * @param config Configuration object containing API settings
+ * @param callback Function called for each response chunk
+ *
+ * @throws ApiException on HTTP errors
+ * @throws NetworkException on network/connection errors
+ * @throws ConfigurationException on invalid configuration
+ * @throws ValidationException on invalid input data
+ *
+ * @note This function simulates streaming by making a regular request
+ *       and then calling the callback with chunks of the response.
+ *       True SSE streaming requires a different HTTP client library.
+ * @note Security: Validates all inputs and enforces size limits
+ */
+void cmdgpt::get_gpt_chat_response_stream(std::string_view prompt, const Config& config,
+                                          StreamCallback callback)
+{
+    // Validate configuration and input
+    config.validate();
+    validate_prompt(prompt);
+
+    if (!callback)
+    {
+        throw ValidationException("Stream callback function is required");
+    }
+
+    // For now, we'll use non-streaming API and simulate streaming output
+    // True SSE streaming would require a different approach with cpp-httplib
+    // or switching to a library that supports SSE out of the box
+
+    try
+    {
+        // Get the complete response
+        std::string response = get_gpt_chat_response(prompt, config);
+
+        // Simulate streaming by sending the response in chunks
+        // This provides a better UX even without true streaming
+        const size_t chunk_size = 20; // Characters per chunk
+        for (size_t i = 0; i < response.length(); i += chunk_size)
+        {
+            size_t len = std::min(chunk_size, response.length() - i);
+            callback(response.substr(i, len));
+
+            // Small delay to simulate streaming effect
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+    }
+    catch (const std::exception& e)
+    {
+        // Re-throw with same type
+        throw;
+    }
+}
+
+/**
+ * @brief Send streaming chat request with conversation history
+ *
+ * @param conversation The conversation history
+ * @param config Configuration object containing API settings
+ * @param callback Function called for each response chunk
+ *
+ * @throws ApiException on HTTP errors
+ * @throws NetworkException on network/connection errors
+ * @throws ConfigurationException on invalid configuration
+ * @throws ValidationException on invalid input data
+ *
+ * @note Simulates streaming responses based on full conversation context
+ * @note Security: Validates conversation size to prevent abuse
+ */
+void cmdgpt::get_gpt_chat_response_stream(const Conversation& conversation, const Config& config,
+                                          StreamCallback callback)
+{
+    // Validate inputs
+    config.validate();
+
+    if (!callback)
+    {
+        throw ValidationException("Stream callback function is required");
+    }
+
+    if (conversation.get_messages().empty())
+    {
+        throw ValidationException("Conversation cannot be empty");
+    }
+
+    // Security: Check conversation size to prevent token limit abuse
+    // Using a reasonable token limit (4096 tokens is typical for many models)
+    const size_t MAX_TOKENS = 4096;
+    if (conversation.estimate_tokens() > MAX_TOKENS)
+    {
+        throw ValidationException("Conversation exceeds maximum token limit");
+    }
+
+    // For now, we'll use non-streaming API and simulate streaming output
+    // True SSE streaming would require a different approach with cpp-httplib
+    // or switching to a library that supports SSE out of the box
+
+    try
+    {
+        // Get the complete response
+        std::string response = get_gpt_chat_response(conversation, config);
+
+        // Simulate streaming by sending the response in chunks
+        // This provides a better UX even without true streaming
+        const size_t chunk_size = 20; // Characters per chunk
+        for (size_t i = 0; i < response.length(); i += chunk_size)
+        {
+            size_t len = std::min(chunk_size, response.length() - i);
+            callback(response.substr(i, len));
+
+            // Small delay to simulate streaming effect
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+    }
+    catch (const std::exception& e)
+    {
+        // Re-throw with same type
+        throw;
+    }
+}
+
+// ============================================================================
 // Output Formatting Functions
 // ============================================================================
 
@@ -879,12 +1253,38 @@ std::string cmdgpt::format_output(const std::string& content, OutputFormat forma
 void cmdgpt::run_interactive_mode(Config& config)
 {
     std::cout << "cmdgpt " << VERSION << " - Interactive Mode\n";
-    std::cout << "Type '/help' for commands, '/exit' to quit\n\n";
+    std::cout << "Type '/help' for commands, '/exit' to quit\n";
 
     Conversation conversation;
 
-    // Add system prompt to conversation
-    if (!config.system_prompt().empty())
+    // Check for recovery file
+    const std::string recovery_file = ".cmdgpt_recovery.json";
+    if (fs::exists(recovery_file))
+    {
+        std::cout << "\nRecovery file found from previous session.\n";
+        std::cout << "Load it? (y/n): ";
+        std::string response;
+        if (std::getline(std::cin, response) && (response == "y" || response == "Y"))
+        {
+            try
+            {
+                conversation.load_from_file(recovery_file);
+                std::cout << "Previous conversation restored.\n";
+                // Remove recovery file after successful load
+                fs::remove(recovery_file);
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "Failed to load recovery file: " << e.what() << "\n";
+            }
+        }
+    }
+
+    std::cout << "\n";
+
+    // Add system prompt to conversation if not already present
+    if (!config.system_prompt().empty() &&
+        (conversation.get_messages().empty() || conversation.get_messages()[0].role != SYSTEM_ROLE))
     {
         conversation.add_message(SYSTEM_ROLE, config.system_prompt());
     }
@@ -991,19 +1391,87 @@ void cmdgpt::run_interactive_mode(Config& config)
         try
         {
             std::cout << "\n";
-            std::string response = get_gpt_chat_response(conversation, config);
 
-            // Add assistant response to conversation
-            conversation.add_message("assistant", response);
+            if (config.streaming_mode())
+            {
+                // Streaming mode - output chunks as they arrive
+                std::string full_response;
 
-            // Display response
-            std::cout << response << "\n\n";
+                get_gpt_chat_response_stream(conversation, config,
+                                             [&full_response](const std::string& chunk)
+                                             {
+                                                 std::cout << chunk << std::flush;
+                                                 full_response += chunk;
+                                             });
+
+                std::cout << "\n\n";
+
+                // Add complete response to conversation history
+                conversation.add_message("assistant", full_response);
+            }
+            else
+            {
+                // Non-streaming mode - wait for complete response with retry
+                std::string response = get_gpt_chat_response_with_retry(conversation, config);
+
+                // Add assistant response to conversation
+                conversation.add_message("assistant", response);
+
+                // Display response
+                std::cout << response << "\n\n";
+            }
         }
         catch (const std::exception& e)
         {
-            std::cerr << "Error: " << e.what() << "\n\n";
+            std::cerr << "Error: " << e.what() << "\n";
+
+            // Auto-save conversation on error for recovery
+            try
+            {
+                const std::string recovery_file = ".cmdgpt_recovery.json";
+                conversation.save_to_file(recovery_file);
+                std::cerr << "Conversation saved to " << recovery_file << " for recovery.\n";
+                std::cerr << "Use '/load " << recovery_file << "' to restore.\n";
+            }
+            catch (const std::exception& save_error)
+            {
+                std::cerr << "Failed to save recovery file: " << save_error.what() << "\n";
+            }
+
+            std::cerr << "\n";
         }
     }
 
     std::cout << "\nGoodbye!\n";
+}
+
+// ============================================================================
+// Retry-Enabled API Functions
+// ============================================================================
+
+/**
+ * @brief Send chat request with automatic retry on failure
+ */
+std::string cmdgpt::get_gpt_chat_response_with_retry(std::string_view prompt, const Config& config,
+                                                     int max_retries)
+{
+    // Use lambda to wrap the API call for retry logic
+    auto api_call = [&prompt, &config]() { return get_gpt_chat_response(prompt, config); };
+
+    // Initial delay of 1 second, doubles on each retry
+    return retry_with_backoff(api_call, max_retries, 1000);
+}
+
+/**
+ * @brief Send chat request with conversation history and automatic retry
+ */
+std::string cmdgpt::get_gpt_chat_response_with_retry(const Conversation& conversation,
+                                                     const Config& config, int max_retries)
+{
+    // Use lambda to wrap the API call for retry logic
+    auto api_call = [&conversation, &config]()
+    { return get_gpt_chat_response(conversation, config); };
+
+    // Initial delay of 1 second, doubles on each retry
+    return retry_with_backoff(api_call, max_retries, 1000);
 }
