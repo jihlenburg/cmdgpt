@@ -1428,10 +1428,10 @@ void cmdgpt::run_interactive_mode(const Config& config)
             // Auto-save conversation on error for recovery
             try
             {
-                const std::string recovery_file = ".cmdgpt_recovery.json";
-                conversation.save_to_file(recovery_file);
-                std::cerr << "Conversation saved to " << recovery_file << " for recovery.\n";
-                std::cerr << "Use '/load " << recovery_file << "' to restore.\n";
+                const std::string error_recovery_file = ".cmdgpt_recovery.json";
+                conversation.save_to_file(error_recovery_file);
+                std::cerr << "Conversation saved to " << error_recovery_file << " for recovery.\n";
+                std::cerr << "Use '/load " << error_recovery_file << "' to restore.\n";
             }
             catch (const std::exception& save_error)
             {
