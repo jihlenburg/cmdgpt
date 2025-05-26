@@ -10,9 +10,9 @@ PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
 
 # Define source files to check
 SOURCE_FILES=(
-    "cmdgpt.cpp"
-    "cmdgpt.h"
-    "main.cpp"
+    "src/cmdgpt.cpp"
+    "src/cmdgpt.h"
+    "src/main.cpp"
     "tests/cmdgpt_tests.cpp"
 )
 
@@ -35,7 +35,7 @@ else
         --inline-suppr \
         --std=c++17 \
         --language=c++ \
-        -I. \
+        -I. -Isrc \
         "${SOURCE_FILES[@]}" 2>&1 | grep -v "information: Limiting analysis" || true
     
     # Check if cppcheck found any real errors by running again and checking exit code
@@ -46,6 +46,6 @@ else
         --std=c++17 \
         --language=c++ \
         --quiet \
-        -I. \
+        -I. -Isrc \
         "${SOURCE_FILES[@]}"
 fi

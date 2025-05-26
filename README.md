@@ -127,7 +127,7 @@ export OPENAI_API_KEY="your-api-key"
 
 # Templates
 ./cmdgpt --list-templates                    # List available templates
-./cmdgpt --template code-review "$(cat main.cpp)"
+./cmdgpt --template code-review "$(cat src/main.cpp)"
 ./cmdgpt --template refactor "$(cat utils.js)" "modularity"
 
 # Token usage
@@ -296,9 +296,10 @@ The tool follows standard Unix exit codes:
 
 ```
 cmdgpt/
-├── cmdgpt.h          # Header file with declarations
-├── cmdgpt.cpp        # Core implementation
-├── main.cpp          # CLI entry point
+├── src/              # Source code
+│   ├── cmdgpt.h      # Header file with declarations
+│   ├── cmdgpt.cpp    # Core implementation
+│   └── main.cpp      # CLI entry point
 ├── tests/            # Test suite
 │   ├── cmdgpt_tests.cpp
 │   └── README.md     # Testing guide
@@ -326,14 +327,15 @@ cmdgpt/
 │   ├── images/       # Documentation images
 │   ├── mainpage.dox  # Documentation main page
 │   ├── Doxyfile      # Doxygen configuration
+│   ├── CONTRIBUTING.md # Contribution guidelines
+│   ├── WORKFLOW.md   # Development workflow
 │   └── README.md     # Documentation guide
 ├── build.sh          # Unified build script
 ├── CMakeLists.txt    # CMake configuration
 ├── LICENSE           # MIT License
 ├── README.md         # This file
 ├── CHANGELOG.md      # Version history
-├── CLAUDE.md         # AI assistant guide
-└── WORKFLOW.md       # Development workflow guide
+└── CLAUDE.md         # AI assistant guide
 ```
 
 ### Code Style
@@ -389,7 +391,7 @@ The documentation includes:
 
 ### Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on:
+We welcome contributions! Please see our [Contributing Guide](docs/CONTRIBUTING.md) for details on:
 
 - Development setup
 - Coding standards

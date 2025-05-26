@@ -4,8 +4,8 @@
 PROJECT_NAME           = "cmdgpt"
 PROJECT_NUMBER         = "v0.4.0"
 PROJECT_BRIEF          = "Command-line interface for OpenAI GPT API"
-PROJECT_LOGO           = docs/images/logo.png 
-OUTPUT_DIRECTORY       = docs
+PROJECT_LOGO           = images/logo.png 
+OUTPUT_DIRECTORY       = .
 CREATE_SUBDIRS         = YES
 ALLOW_UNICODE_NAMES    = NO
 OUTPUT_LANGUAGE        = English
@@ -83,7 +83,7 @@ WARN_LINE_FORMAT       = "at line $line of file $file"
 WARN_LOGFILE           = 
 
 # Configuration options related to the input files
-INPUT                  = cmdgpt.h cmdgpt.cpp main.cpp mainpage.dox README.md CHANGELOG.md
+INPUT                  = ../src/cmdgpt.h ../src/cmdgpt.cpp ../src/main.cpp mainpage.dox ../README.md ../CHANGELOG.md
 INPUT_ENCODING         = UTF-8
 INPUT_FILE_ENCODING    = 
 FILE_PATTERNS          = *.c \

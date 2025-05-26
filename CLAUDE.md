@@ -40,13 +40,13 @@ cd build && ctest -V
 This is a C++ command-line tool that interfaces with OpenAI's API. The codebase follows a library pattern with namespace encapsulation:
 
 - **cmdgpt_lib**: Static library containing core functionality
-  - `cmdgpt.cpp/h`: OpenAI API client, JSON handling, logging setup, conversation management
+  - `src/cmdgpt.cpp/h`: OpenAI API client, JSON handling, logging setup, conversation management
   - Uses cpp-httplib for HTTP requests, nlohmann/json for parsing, spdlog for logging
   - Implements modern C++ patterns with namespace `cmdgpt::`
   - Features: interactive mode, config files, output formatting, security validation
   
 - **cmdgpt**: CLI executable that uses the library
-  - `main.cpp`: Argument parsing, environment variable handling, user interface
+  - `src/main.cpp`: Argument parsing, environment variable handling, user interface
   - Supports interactive REPL mode and multiple output formats
   
 - **cmdgpt_tests**: Catch2-based test suite
