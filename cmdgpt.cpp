@@ -229,7 +229,7 @@ void cmdgpt::Config::set_system_prompt(std::string_view prompt)
     {
         throw ValidationException("System prompt exceeds maximum allowed length");
     }
-    system_prompt_ = prompt.empty() ? std::string{DEFAULT_SYSTEM_PROMPT} : std::string{prompt};
+    system_prompt_ = prompt.empty() ? std::string(DEFAULT_SYSTEM_PROMPT) : std::string(prompt);
 }
 
 void cmdgpt::Config::set_model(std::string_view model)
@@ -238,7 +238,7 @@ void cmdgpt::Config::set_model(std::string_view model)
     {
         throw ValidationException("Invalid model name");
     }
-    model_ = std::string{model};
+    model_ = std::string(model);
 }
 
 void cmdgpt::Config::set_log_file(std::string_view file)
