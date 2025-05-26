@@ -104,3 +104,5 @@ The tool supports command-line arguments, environment variables, and configurati
   - Document non-obvious implementation details or design decisions
 
 - Always consider the security of the code you generate
+
+- Always make sure everything builds from scratch and that the code quality tests succeed before committing to git
