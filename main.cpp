@@ -125,13 +125,13 @@ int main(int argc, const char* const argv[])
         }
         else if (arg == "--cache-stats")
         {
-            auto& cache = cmdgpt::get_response_cache();
-            auto stats = cache.get_stats();
+            const auto& cache = cmdgpt::get_response_cache();
+            const auto stats = cache.get_stats();
             std::cout << "Cache Statistics:\n";
-            std::cout << "  Entries: " << stats["count"] << "\n";
-            std::cout << "  Size: " << (stats["size_bytes"] / 1024) << " KB\n";
-            std::cout << "  Hits: " << stats["hits"] << "\n";
-            std::cout << "  Misses: " << stats["misses"] << "\n";
+            std::cout << "  Entries: " << stats.at("count") << "\n";
+            std::cout << "  Size: " << (stats.at("size_bytes") / 1024) << " KB\n";
+            std::cout << "  Hits: " << stats.at("hits") << "\n";
+            std::cout << "  Misses: " << stats.at("misses") << "\n";
             return EXIT_SUCCESS;
         }
         else if (arg == "-f" || arg == "--format")

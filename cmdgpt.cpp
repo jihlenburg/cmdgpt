@@ -540,7 +540,7 @@ std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, const Config&
     {
         auto& cache = get_response_cache();
         std::string cache_key = cache.generate_key(prompt, config.model(), config.system_prompt());
-        
+
         std::string cached_response = cache.get(cache_key);
         if (!cached_response.empty())
         {
@@ -550,8 +550,9 @@ std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, const Config&
     }
 
     // Make API call
-    std::string response = get_gpt_chat_response(prompt, config.api_key(), config.system_prompt(), config.model());
-    
+    std::string response =
+        get_gpt_chat_response(prompt, config.api_key(), config.system_prompt(), config.model());
+
     // Store in cache if enabled
     if (config.cache_enabled() && !response.empty())
     {
@@ -559,7 +560,7 @@ std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, const Config&
         std::string cache_key = cache.generate_key(prompt, config.model(), config.system_prompt());
         cache.put(cache_key, response);
     }
-    
+
     return response;
 }
 
@@ -1515,16 +1516,17 @@ std::string cmdgpt::get_gpt_chat_response_with_retry(const Conversation& convers
 // Cache Implementation
 // ============================================================================
 
-#include <openssl/sha.h>
-#include <iomanip>
-#include <sstream>
-#include <ctime>
 #include <cctype>
+#include <ctime>
+#include <iomanip>
+#include <openssl/sha.h>
+#include <sstream>
 
 /**
  * @brief ResponseCache constructor
  */
-cmdgpt::ResponseCache::ResponseCache(const std::filesystem::path& cache_dir, size_t expiration_hours)
+cmdgpt::ResponseCache::ResponseCache(const std::filesystem::path& cache_dir,
+                                     size_t expiration_hours)
     : expiration_hours_(expiration_hours)
 {
     if (cache_dir.empty())
@@ -1544,52 +1546,60 @@ cmdgpt::ResponseCache::ResponseCache(const std::filesystem::path& cache_dir, siz
 
     // Create cache directory if it doesn't exist with secure permissions
     std::filesystem::create_directories(cache_dir_);
-    
+
     // Set secure permissions (owner read/write/execute only)
-    std::filesystem::permissions(cache_dir_,
-        std::filesystem::perms::owner_all |
-        std::filesystem::perms::group_all | std::filesystem::perms::others_all,
-        std::filesystem::perm_options::remove);
+    try
+    {
+        std::filesystem::permissions(cache_dir_, std::filesystem::perms::owner_all,
+                                     std::filesystem::perm_options::replace);
+    }
+    catch (const std::filesystem::filesystem_error& e)
+    {
+        // If we can't set permissions, log and continue
+        // This might happen in test environments
+        gLogger->debug("Could not set cache directory permissions: {}", e.what());
+    }
 }
 
 /**
  * @brief Generate SHA256 hash key from request parameters
- * 
+ *
  * Creates a unique cache key by hashing the combination of prompt,
  * model, and system prompt. This ensures identical requests can be
  * matched in the cache.
- * 
+ *
  * @param prompt The user's input prompt
  * @param model The model name (e.g., "gpt-4")
  * @param system_prompt The system prompt for context
  * @return SHA256 hash as a 64-character hexadecimal string
  */
 std::string cmdgpt::ResponseCache::generate_key(std::string_view prompt, std::string_view model,
-                                               std::string_view system_prompt) const
+                                                std::string_view system_prompt) const
 {
     // Combine all parameters
-    std::string combined = std::string(prompt) + "|" + std::string(model) + "|" + std::string(system_prompt);
-    
+    std::string combined =
+        std::string(prompt) + "|" + std::string(model) + "|" + std::string(system_prompt);
+
     // Calculate SHA256 hash
     unsigned char hash[SHA256_DIGEST_LENGTH];
     SHA256(reinterpret_cast<const unsigned char*>(combined.c_str()), combined.length(), hash);
-    
+
     // Convert to hex string
     std::stringstream ss;
     for (int i = 0; i < SHA256_DIGEST_LENGTH; i++)
     {
         ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(hash[i]);
     }
-    
+
     return ss.str();
 }
 
 /**
  * @brief Get cache file path for a key
- * 
+ *
  * Validates the cache key and returns the full path to the cache file.
  * Includes security checks to prevent path traversal attacks.
- * 
+ *
  * @param key The cache key (must be valid SHA256 hex string)
  * @return Full path to the cache file
  * @throws ValidationException if key contains invalid characters
@@ -1605,7 +1615,7 @@ std::filesystem::path cmdgpt::ResponseCache::get_cache_path(const std::string& k
             throw ValidationException("Invalid cache key format");
         }
     }
-    
+
     // Ensure we stay within cache directory
     auto cache_file = cache_dir_ / (key + ".json");
     auto cache_file_str = cache_file.string();
@@ -1614,15 +1624,15 @@ std::filesystem::path cmdgpt::ResponseCache::get_cache_path(const std::string& k
     {
         throw SecurityException("Cache path escape attempt detected");
     }
-    
+
     return cache_file;
 }
 
 /**
  * @brief Check if cache file is expired
- * 
+ *
  * Determines if a cache file has exceeded the expiration time.
- * 
+ *
  * @param path Path to the cache file
  * @return True if file is older than expiration_hours_, false otherwise
  */
@@ -1631,49 +1641,49 @@ bool cmdgpt::ResponseCache::is_expired(const std::filesystem::path& path) const
     auto file_time = std::filesystem::last_write_time(path);
     auto now = std::filesystem::file_time_type::clock::now();
     auto age = std::chrono::duration_cast<std::chrono::hours>(now - file_time);
-    
+
     return age.count() >= static_cast<long>(expiration_hours_);
 }
 
 /**
  * @brief Check if valid cache exists
- * 
+ *
  * Checks if a cache entry exists and is not expired.
- * 
+ *
  * @param key The cache key to check
  * @return True if valid (non-expired) cache exists, false otherwise
  */
 bool cmdgpt::ResponseCache::has_valid_cache(const std::string& key) const
 {
     auto path = get_cache_path(key);
-    
+
     if (!std::filesystem::exists(path))
     {
         return false;
     }
-    
+
     return !is_expired(path);
 }
 
 /**
  * @brief Get cached response
- * 
+ *
  * Retrieves a cached response if it exists and is valid.
  * Updates cache hit/miss statistics.
- * 
+ *
  * @param key The cache key to look up
  * @return The cached response string, or empty string if not found/invalid
  */
 std::string cmdgpt::ResponseCache::get(const std::string& key) const
 {
     auto path = get_cache_path(key);
-    
+
     if (!has_valid_cache(key))
     {
         cache_misses_++;
         return "";
     }
-    
+
     try
     {
         std::ifstream file(path);
@@ -1682,11 +1692,11 @@ std::string cmdgpt::ResponseCache::get(const std::string& key) const
             cache_misses_++;
             return "";
         }
-        
+
         // Read JSON and extract response
         nlohmann::json cache_data;
         file >> cache_data;
-        
+
         cache_hits_++;
         return cache_data["response"].get<std::string>();
     }
@@ -1700,10 +1710,10 @@ std::string cmdgpt::ResponseCache::get(const std::string& key) const
 
 /**
  * @brief Store response in cache
- * 
+ *
  * Saves an API response to the cache with metadata. Enforces cache
  * size limits and uses atomic writes to prevent corruption.
- * 
+ *
  * @param key The cache key for this response
  * @param response The API response text to cache
  */
@@ -1715,7 +1725,7 @@ void cmdgpt::ResponseCache::put(const std::string& key, std::string_view respons
     {
         gLogger->info("Cache full, cleaning expired entries");
         clean_expired();
-        
+
         // If still too many entries, don't cache
         stats = get_stats();
         if (stats["count"] >= MAX_CACHE_ENTRIES)
@@ -1724,15 +1734,15 @@ void cmdgpt::ResponseCache::put(const std::string& key, std::string_view respons
             return;
         }
     }
-    
+
     if (stats["size_bytes"] > MAX_CACHE_SIZE_MB * 1024 * 1024)
     {
         gLogger->warn("Cache size limit exceeded, skipping cache write");
         return;
     }
-    
+
     auto path = get_cache_path(key);
-    
+
     try
     {
         // Create cache entry with metadata
@@ -1740,7 +1750,7 @@ void cmdgpt::ResponseCache::put(const std::string& key, std::string_view respons
         cache_data["response"] = response;
         cache_data["timestamp"] = std::time(nullptr);
         cache_data["version"] = VERSION;
-        
+
         // Write atomically to prevent partial writes
         auto temp_path = path.string() + ".tmp";
         std::ofstream file(temp_path);
@@ -1748,7 +1758,7 @@ void cmdgpt::ResponseCache::put(const std::string& key, std::string_view respons
         {
             file << cache_data.dump(2);
             file.close();
-            
+
             // Atomic rename
             std::filesystem::rename(temp_path, path);
             gLogger->debug("Cached response with key: {}", key);
@@ -1762,15 +1772,15 @@ void cmdgpt::ResponseCache::put(const std::string& key, std::string_view respons
 
 /**
  * @brief Clear all cache entries
- * 
+ *
  * Removes all cached responses from the cache directory.
- * 
+ *
  * @return Number of cache entries that were removed
  */
 size_t cmdgpt::ResponseCache::clear()
 {
     size_t count = 0;
-    
+
     try
     {
         for (const auto& entry : std::filesystem::directory_iterator(cache_dir_))
@@ -1786,21 +1796,21 @@ size_t cmdgpt::ResponseCache::clear()
     {
         gLogger->warn("Failed to clear cache: {}", e.what());
     }
-    
+
     return count;
 }
 
 /**
  * @brief Clean expired cache entries
- * 
+ *
  * Removes cache files that have exceeded the expiration time.
- * 
+ *
  * @return Number of expired entries that were removed
  */
 size_t cmdgpt::ResponseCache::clean_expired()
 {
     size_t count = 0;
-    
+
     try
     {
         for (const auto& entry : std::filesystem::directory_iterator(cache_dir_))
@@ -1816,16 +1826,16 @@ size_t cmdgpt::ResponseCache::clean_expired()
     {
         gLogger->warn("Failed to clean cache: {}", e.what());
     }
-    
+
     return count;
 }
 
 /**
  * @brief Get cache statistics
- * 
+ *
  * Collects statistics about cache usage including hit/miss counts,
  * number of entries, and total size.
- * 
+ *
  * @return Map containing statistics: "hits", "misses", "count", "size_bytes"
  */
 std::map<std::string, size_t> cmdgpt::ResponseCache::get_stats() const
@@ -1833,10 +1843,10 @@ std::map<std::string, size_t> cmdgpt::ResponseCache::get_stats() const
     std::map<std::string, size_t> stats;
     stats["hits"] = cache_hits_;
     stats["misses"] = cache_misses_;
-    
+
     size_t count = 0;
     size_t total_size = 0;
-    
+
     try
     {
         for (const auto& entry : std::filesystem::directory_iterator(cache_dir_))
@@ -1852,19 +1862,19 @@ std::map<std::string, size_t> cmdgpt::ResponseCache::get_stats() const
     {
         gLogger->warn("Failed to get cache stats: {}", e.what());
     }
-    
+
     stats["count"] = count;
     stats["size_bytes"] = total_size;
-    
+
     return stats;
 }
 
 /**
  * @brief Get global cache instance
- * 
+ *
  * Returns a reference to the singleton ResponseCache instance.
  * The cache is created on first access with default settings.
- * 
+ *
  * @return Reference to the global ResponseCache instance
  */
 cmdgpt::ResponseCache& cmdgpt::get_response_cache()
@@ -1881,44 +1891,45 @@ cmdgpt::ResponseCache& cmdgpt::get_response_cache()
  * @brief Model pricing per 1K tokens (as of 2024)
  */
 static const std::map<std::string, std::pair<double, double>> MODEL_PRICING = {
-    {"gpt-4", {0.03, 0.06}},           // input, output per 1K tokens
+    {"gpt-4", {0.03, 0.06}}, // input, output per 1K tokens
     {"gpt-4-turbo-preview", {0.01, 0.03}},
     {"gpt-3.5-turbo", {0.0005, 0.0015}},
-    {"gpt-3.5-turbo-16k", {0.003, 0.004}}
-};
+    {"gpt-3.5-turbo-16k", {0.003, 0.004}}};
 
 /**
  * @brief Parse token usage from API response
- * 
+ *
  * Extracts token usage information from the JSON response and
  * calculates the estimated cost based on model pricing.
- * 
+ *
  * @param response_json The raw JSON response from the API
  * @param model The model name used for pricing calculation
  * @return TokenUsage struct with parsed values (zeros if parsing fails)
  */
-cmdgpt::TokenUsage cmdgpt::parse_token_usage(const std::string& response_json, std::string_view model)
+cmdgpt::TokenUsage cmdgpt::parse_token_usage(const std::string& response_json,
+                                             std::string_view model)
 {
     TokenUsage usage;
-    
+
     try
     {
         auto json = nlohmann::json::parse(response_json);
-        
+
         if (json.contains("usage"))
         {
             auto& usage_json = json["usage"];
             usage.prompt_tokens = usage_json.value("prompt_tokens", 0);
             usage.completion_tokens = usage_json.value("completion_tokens", 0);
             usage.total_tokens = usage_json.value("total_tokens", 0);
-            
+
             // Calculate cost if model pricing is known
             std::string model_str(model);
             if (MODEL_PRICING.count(model_str) > 0)
             {
                 const auto& pricing = MODEL_PRICING.at(model_str);
-                usage.estimated_cost = (usage.prompt_tokens * pricing.first + 
-                                      usage.completion_tokens * pricing.second) / 1000.0;
+                usage.estimated_cost = (usage.prompt_tokens * pricing.first +
+                                        usage.completion_tokens * pricing.second) /
+                                       1000.0;
             }
         }
     }
@@ -1926,16 +1937,16 @@ cmdgpt::TokenUsage cmdgpt::parse_token_usage(const std::string& response_json, s
     {
         gLogger->debug("Failed to parse token usage: {}", e.what());
     }
-    
+
     return usage;
 }
 
 /**
  * @brief Format token usage for display
- * 
+ *
  * Creates a human-readable string representation of token usage
  * including counts and estimated cost.
- * 
+ *
  * @param usage The TokenUsage struct to format
  * @return Formatted string suitable for console output
  */
@@ -1943,14 +1954,12 @@ std::string cmdgpt::format_token_usage(const TokenUsage& usage)
 {
     std::stringstream ss;
     ss << "Token Usage: " << usage.total_tokens << " total "
-       << "(" << usage.prompt_tokens << " prompt + "
-       << usage.completion_tokens << " completion)";
-    
+       << "(" << usage.prompt_tokens << " prompt + " << usage.completion_tokens << " completion)";
+
     if (usage.estimated_cost > 0)
     {
-        ss << std::fixed << std::setprecision(4)
-           << " ~$" << usage.estimated_cost << " USD";
+        ss << std::fixed << std::setprecision(4) << " ~$" << usage.estimated_cost << " USD";
     }
-    
+
     return ss.str();
 }

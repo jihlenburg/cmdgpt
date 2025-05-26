@@ -284,7 +284,7 @@ class ValidationException : public CmdGptException
  * - Permission violations
  * - Cache tampering attempts
  * - Invalid or malicious input that could compromise system security
- * 
+ *
  * This exception indicates a serious security concern that should be
  * logged and handled appropriately to prevent potential exploits.
  */
@@ -411,10 +411,10 @@ class Config
 
     /**
      * @brief Enable or disable response caching
-     * 
+     *
      * When enabled, API responses are cached to disk to avoid redundant
      * API calls for identical requests.
-     * 
+     *
      * @param enable True to enable caching, false to disable
      */
     void set_cache_enabled(bool enable) noexcept
@@ -424,7 +424,7 @@ class Config
 
     /**
      * @brief Check if response caching is enabled
-     * 
+     *
      * @return True if caching is enabled, false otherwise
      */
     bool cache_enabled() const noexcept
@@ -434,10 +434,10 @@ class Config
 
     /**
      * @brief Enable or disable token usage display
-     * 
+     *
      * When enabled, token count and estimated cost are displayed
      * after each API response.
-     * 
+     *
      * @param enable True to show token usage, false to hide
      */
     void set_show_tokens(bool enable) noexcept
@@ -447,7 +447,7 @@ class Config
 
     /**
      * @brief Check if token usage display is enabled
-     * 
+     *
      * @return True if token usage should be shown, false otherwise
      */
     bool show_tokens() const noexcept
@@ -821,14 +821,14 @@ std::string get_gpt_chat_response_with_retry(const Conversation& conversation, c
  */
 class ResponseCache
 {
-public:
+  public:
     /**
      * @brief Construct cache with custom directory and expiration
      * @param cache_dir Directory to store cache files
      * @param expiration_hours Hours before cache entries expire (default: 24)
      */
     explicit ResponseCache(const std::filesystem::path& cache_dir = "",
-                          size_t expiration_hours = 24);
+                           size_t expiration_hours = 24);
 
     /**
      * @brief Generate cache key from request parameters
@@ -838,7 +838,7 @@ public:
      * @return SHA256 hash as hex string
      */
     std::string generate_key(std::string_view prompt, std::string_view model,
-                           std::string_view system_prompt) const;
+                             std::string_view system_prompt) const;
 
     /**
      * @brief Check if a valid cache entry exists
@@ -879,7 +879,7 @@ public:
      */
     std::map<std::string, size_t> get_stats() const;
 
-private:
+  private:
     std::filesystem::path cache_dir_;
     size_t expiration_hours_;
     mutable size_t cache_hits_ = 0;
@@ -897,7 +897,7 @@ ResponseCache& get_response_cache();
 
 /**
  * @brief Token usage information from API response
- * 
+ *
  * Tracks the number of tokens consumed by an API request and calculates
  * the estimated cost based on the model's pricing.
  */
@@ -911,15 +911,16 @@ struct TokenUsage
 
 /**
  * @brief Complete API response including content and metadata
- * 
+ *
  * Encapsulates the full response from the API including the text content,
  * token usage statistics, and cache status.
  */
 struct ApiResponse
 {
-    std::string content;     ///< The actual response text from the API
-    TokenUsage token_usage;  ///< Token usage and cost information for this request
-    bool from_cache = false; ///< Whether this response was retrieved from cache (true) or API (false)
+    std::string content;    ///< The actual response text from the API
+    TokenUsage token_usage; ///< Token usage and cost information for this request
+    bool from_cache =
+        false; ///< Whether this response was retrieved from cache (true) or API (false)
 };
 
 /**
