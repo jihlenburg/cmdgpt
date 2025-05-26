@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - v0.5.0-dev
+
+### Added
+- Response caching system to avoid duplicate API calls
+  - SHA256-based cache keys for secure and consistent hashing
+  - 24-hour default cache expiration
+  - Cache size limits (100MB, 1000 entries) to prevent disk exhaustion
+  - `--no-cache` flag to bypass cache for current request
+  - `--clear-cache` command to clear all cached responses
+  - `--cache-stats` command to display cache statistics
+- Token usage tracking infrastructure
+  - `TokenUsage` struct for tracking prompt/completion tokens and costs
+  - `--show-tokens` flag to display token usage after responses
+  - Model-specific pricing calculations
+- Security improvements
+  - Cache directory with restricted permissions (700)
+  - Path traversal protection in cache operations
+  - Atomic file writes to prevent corruption
+  - Input validation for cache keys
+
+### Security
+- Fixed potential path traversal vulnerability in cache file operations
+- Added secure file permissions for cache directory
+- Implemented cache size limits to prevent disk exhaustion attacks
+- Added validation for cache key format
+
+### Changed
+- Enhanced Config class with cache and token display settings
+- Improved error handling with new SecurityException type
+
 ## [0.4.2] - 2025-05-26
 
 ### Added
