@@ -3,7 +3,7 @@
  * @brief Command-line interface for OpenAI GPT API
  * @author Joern Ihlenburg
  * @date 2023-2024
- * @version 0.4.2
+ * @version 0.5.0-dev
  *
  * This file contains the main API declarations for cmdgpt, a command-line
  * tool for interacting with OpenAI's GPT models. It provides features including:
@@ -45,6 +45,7 @@ SOFTWARE.
 #define CMDGPT_H
 
 #include "spdlog/spdlog.h"
+#include <chrono>
 #include <deque>
 #include <filesystem>
 #include <fstream>
@@ -72,7 +73,7 @@ namespace cmdgpt
 {
 
 /// @brief Current version of cmdgpt
-inline constexpr std::string_view VERSION = "v0.4.2";
+inline constexpr std::string_view VERSION = "v0.5.0-dev";
 
 /// @name Default Configuration Values
 /// @{
@@ -385,6 +386,42 @@ class Config
     }
 
     /**
+     * @brief Enable or disable response caching
+     * @param enable True to enable caching, false to disable
+     */
+    void set_cache_enabled(bool enable) noexcept
+    {
+        cache_enabled_ = enable;
+    }
+
+    /**
+     * @brief Check if caching is enabled
+     * @return True if caching is enabled
+     */
+    bool cache_enabled() const noexcept
+    {
+        return cache_enabled_;
+    }
+
+    /**
+     * @brief Enable or disable token usage display
+     * @param enable True to show token usage, false to hide
+     */
+    void set_show_tokens(bool enable) noexcept
+    {
+        show_tokens_ = enable;
+    }
+
+    /**
+     * @brief Check if token usage display is enabled
+     * @return True if token usage should be shown
+     */
+    bool show_tokens() const noexcept
+    {
+        return show_tokens_;
+    }
+
+    /**
      * @brief Load configuration from environment variables
      *
      * Reads from:
@@ -409,6 +446,8 @@ class Config
     std::string log_file_{"logfile.txt"};                    ///< Path to debug log file
     spdlog::level::level_enum log_level_{DEFAULT_LOG_LEVEL}; ///< Logging verbosity level
     bool streaming_mode_{false};                             ///< Whether to stream responses
+    bool cache_enabled_{true};                               ///< Whether to use response cache
+    bool show_tokens_{false};                                ///< Whether to display token usage
 };
 
 /**
@@ -734,6 +773,129 @@ std::string get_gpt_chat_response_with_retry(std::string_view prompt, const Conf
  */
 std::string get_gpt_chat_response_with_retry(const Conversation& conversation, const Config& config,
                                              int max_retries = 3);
+
+// ============================================================================
+// Cache Management
+// ============================================================================
+
+/**
+ * @brief Response cache for avoiding duplicate API calls
+ *
+ * Caches API responses to disk using a hash of the request parameters.
+ * Default cache location: ~/.cmdgpt/cache/
+ * Default expiration: 24 hours
+ */
+class ResponseCache
+{
+public:
+    /**
+     * @brief Construct cache with custom directory and expiration
+     * @param cache_dir Directory to store cache files
+     * @param expiration_hours Hours before cache entries expire (default: 24)
+     */
+    explicit ResponseCache(const std::filesystem::path& cache_dir = "",
+                          size_t expiration_hours = 24);
+
+    /**
+     * @brief Generate cache key from request parameters
+     * @param prompt User prompt
+     * @param model Model name
+     * @param system_prompt System prompt
+     * @return SHA256 hash as hex string
+     */
+    std::string generate_key(std::string_view prompt, std::string_view model,
+                           std::string_view system_prompt) const;
+
+    /**
+     * @brief Check if a valid cache entry exists
+     * @param key Cache key
+     * @return true if valid cache exists, false otherwise
+     */
+    bool has_valid_cache(const std::string& key) const;
+
+    /**
+     * @brief Retrieve cached response
+     * @param key Cache key
+     * @return Cached response or empty string if not found
+     */
+    std::string get(const std::string& key) const;
+
+    /**
+     * @brief Store response in cache
+     * @param key Cache key
+     * @param response Response to cache
+     */
+    void put(const std::string& key, std::string_view response);
+
+    /**
+     * @brief Clear all cache entries
+     * @return Number of entries cleared
+     */
+    size_t clear();
+
+    /**
+     * @brief Clean expired cache entries
+     * @return Number of entries removed
+     */
+    size_t clean_expired();
+
+    /**
+     * @brief Get cache statistics
+     * @return Map of statistics (size, count, hits, misses)
+     */
+    std::map<std::string, size_t> get_stats() const;
+
+private:
+    std::filesystem::path cache_dir_;
+    size_t expiration_hours_;
+    mutable size_t cache_hits_ = 0;
+    mutable size_t cache_misses_ = 0;
+
+    std::filesystem::path get_cache_path(const std::string& key) const;
+    bool is_expired(const std::filesystem::path& path) const;
+};
+
+/**
+ * @brief Get or create the global response cache instance
+ * @return Reference to the global cache
+ */
+ResponseCache& get_response_cache();
+
+/**
+ * @brief Token usage information from API response
+ */
+struct TokenUsage
+{
+    size_t prompt_tokens = 0;     ///< Tokens in the prompt
+    size_t completion_tokens = 0; ///< Tokens in the completion
+    size_t total_tokens = 0;      ///< Total tokens used
+    double estimated_cost = 0.0;  ///< Estimated cost in USD
+};
+
+/**
+ * @brief Complete API response including content and metadata
+ */
+struct ApiResponse
+{
+    std::string content;     ///< The actual response text
+    TokenUsage token_usage;  ///< Token usage information
+    bool from_cache = false; ///< Whether response was from cache
+};
+
+/**
+ * @brief Parse token usage from API response
+ * @param response_json JSON response from API
+ * @param model Model name for cost calculation
+ * @return TokenUsage struct with parsed values
+ */
+TokenUsage parse_token_usage(const std::string& response_json, std::string_view model);
+
+/**
+ * @brief Format token usage for display
+ * @param usage Token usage information
+ * @return Formatted string for display
+ */
+std::string format_token_usage(const TokenUsage& usage);
 
 } // namespace cmdgpt
 

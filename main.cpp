@@ -108,6 +108,32 @@ int main(int argc, const char* const argv[])
             streaming_mode = true;
             config.set_streaming_mode(true);
         }
+        else if (arg == "--no-cache")
+        {
+            config.set_cache_enabled(false);
+        }
+        else if (arg == "--clear-cache")
+        {
+            auto& cache = cmdgpt::get_response_cache();
+            size_t cleared = cache.clear();
+            std::cout << "Cleared " << cleared << " cache entries." << std::endl;
+            return EXIT_SUCCESS;
+        }
+        else if (arg == "--show-tokens")
+        {
+            config.set_show_tokens(true);
+        }
+        else if (arg == "--cache-stats")
+        {
+            auto& cache = cmdgpt::get_response_cache();
+            auto stats = cache.get_stats();
+            std::cout << "Cache Statistics:\n";
+            std::cout << "  Entries: " << stats["count"] << "\n";
+            std::cout << "  Size: " << (stats["size_bytes"] / 1024) << " KB\n";
+            std::cout << "  Hits: " << stats["hits"] << "\n";
+            std::cout << "  Misses: " << stats["misses"] << "\n";
+            return EXIT_SUCCESS;
+        }
         else if (arg == "-f" || arg == "--format")
         {
             if (++i >= argc)
