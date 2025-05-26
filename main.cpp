@@ -34,6 +34,7 @@ SOFTWARE.
 */
 
 #include "cmdgpt.h"
+#include "spdlog/async.h"
 #include "spdlog/sinks/ansicolor_sink.h"
 #include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/spdlog.h"
@@ -123,6 +124,23 @@ int main(int argc, const char* const argv[])
         {
             config.set_show_tokens(true);
         }
+        else if (arg == "--endpoint")
+        {
+            if (++i >= argc)
+            {
+                std::cerr << "Error: Endpoint argument requires a value" << std::endl;
+                return EX_USAGE;
+            }
+            try
+            {
+                config.set_endpoint(argv[i]);
+            }
+            catch (const cmdgpt::ValidationException& e)
+            {
+                std::cerr << "Error: " << e.what() << std::endl;
+                return EX_USAGE;
+            }
+        }
         else if (arg == "--cache-stats")
         {
             const auto& cache = cmdgpt::get_response_cache();
@@ -133,6 +151,143 @@ int main(int argc, const char* const argv[])
             std::cout << "  Hits: " << stats.at("hits") << "\n";
             std::cout << "  Misses: " << stats.at("misses") << "\n";
             return EXIT_SUCCESS;
+        }
+        else if (arg == "--history")
+        {
+            const auto& history = cmdgpt::get_response_history();
+            auto recent = history.get_recent(10);
+
+            if (recent.empty())
+            {
+                std::cout << "No history entries found.\n";
+            }
+            else
+            {
+                std::cout << "Recent History (last " << recent.size() << " entries):\n\n";
+                for (const auto& entry : recent)
+                {
+                    std::cout << "Date: " << entry.timestamp << "\n";
+                    std::cout << "Model: " << entry.model;
+                    if (entry.from_cache)
+                        std::cout << " (cached)";
+                    std::cout << "\n";
+                    std::cout << "Prompt: " << entry.prompt.substr(0, 80);
+                    if (entry.prompt.length() > 80)
+                        std::cout << "...";
+                    std::cout << "\n";
+                    std::cout << "Tokens: " << entry.token_usage.total_tokens;
+                    if (entry.token_usage.estimated_cost > 0)
+                    {
+                        std::cout << " (~$" << std::fixed << std::setprecision(4)
+                                  << entry.token_usage.estimated_cost << ")";
+                    }
+                    std::cout << "\n\n";
+                }
+            }
+            return EXIT_SUCCESS;
+        }
+        else if (arg == "--clear-history")
+        {
+            auto& history = cmdgpt::get_response_history();
+            size_t cleared = history.clear();
+            std::cout << "Cleared " << cleared << " history entries." << std::endl;
+            return EXIT_SUCCESS;
+        }
+        else if (arg == "--search-history")
+        {
+            if (++i >= argc)
+            {
+                std::cerr << "Error: Search query required" << std::endl;
+                return EX_USAGE;
+            }
+            const auto& history = cmdgpt::get_response_history();
+            auto results = history.search(argv[i]);
+
+            if (results.empty())
+            {
+                std::cout << "No matching history entries found.\n";
+            }
+            else
+            {
+                std::cout << "Found " << results.size() << " matching entries:\n\n";
+                for (const auto& entry : results)
+                {
+                    std::cout << "Date: " << entry.timestamp << "\n";
+                    std::cout << "Prompt: " << entry.prompt.substr(0, 80);
+                    if (entry.prompt.length() > 80)
+                        std::cout << "...";
+                    std::cout << "\n\n";
+                }
+            }
+            return EXIT_SUCCESS;
+        }
+        else if (arg == "--list-templates")
+        {
+            const auto& manager = cmdgpt::get_template_manager();
+            auto templates = manager.list_templates();
+
+            std::cout << "Available Templates:\n\n";
+            for (const auto& templ : templates)
+            {
+                std::cout << templ.name << " - " << templ.description << "\n";
+                if (!templ.variables.empty())
+                {
+                    std::cout << "  Variables: ";
+                    for (size_t j = 0; j < templ.variables.size(); ++j)
+                    {
+                        std::cout << templ.variables[j];
+                        if (j < templ.variables.size() - 1)
+                            std::cout << ", ";
+                    }
+                    std::cout << "\n";
+                }
+                std::cout << "\n";
+            }
+            return EXIT_SUCCESS;
+        }
+        else if (arg == "--template")
+        {
+            if (++i >= argc)
+            {
+                std::cerr << "Error: Template name required" << std::endl;
+                return EX_USAGE;
+            }
+            std::string template_name = argv[i];
+
+            const auto& manager = cmdgpt::get_template_manager();
+            auto templ_opt = manager.get_template(template_name);
+
+            if (!templ_opt)
+            {
+                std::cerr << "Error: Template '" << template_name << "' not found" << std::endl;
+                std::cerr << "Use --list-templates to see available templates" << std::endl;
+                return EX_USAGE;
+            }
+
+            const auto& templ = *templ_opt;
+            std::map<std::string, std::string> variables;
+
+            // Collect variable values
+            for (const auto& var : templ.variables)
+            {
+                if (++i >= argc)
+                {
+                    std::cerr << "Error: Value required for variable '" << var << "'" << std::endl;
+                    return EX_USAGE;
+                }
+                variables[var] = argv[i];
+            }
+
+            // Apply template
+            try
+            {
+                prompt = manager.apply_template(template_name, variables);
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "Error applying template: " << e.what() << std::endl;
+                return EX_USAGE;
+            }
         }
         else if (arg == "-f" || arg == "--format")
         {
@@ -250,12 +405,26 @@ int main(int argc, const char* const argv[])
     // Set up logging
     try
     {
+        // Initialize async logger with a thread pool
+        // Queue size of 8192 and 1 backend thread for async logging
+        spdlog::init_thread_pool(8192, 1);
+
         auto console_sink = std::make_shared<spdlog::sinks::ansicolor_stdout_sink_mt>();
         auto file_sink =
             std::make_shared<spdlog::sinks::basic_file_sink_mt>(config.log_file(), true);
-        gLogger = std::make_shared<spdlog::logger>(
-            "multi_sink", spdlog::sinks_init_list{console_sink, file_sink});
+
+        // Create async logger to prevent I/O blocking on TRACE level
+        gLogger = std::make_shared<spdlog::async_logger>(
+            "multi_sink", spdlog::sinks_init_list{console_sink, file_sink}, spdlog::thread_pool(),
+            spdlog::async_overflow_policy::block);
+
         gLogger->set_level(config.log_level());
+
+        // Only flush on error or higher to improve performance
+        gLogger->flush_on(spdlog::level::err);
+
+        // Register as default logger
+        spdlog::register_logger(gLogger);
     }
     catch (const spdlog::spdlog_ex& ex)
     {

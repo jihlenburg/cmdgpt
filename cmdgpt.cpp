@@ -49,6 +49,7 @@ SOFTWARE.
 #include <iostream>
 #include <optional>
 #include <regex>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -111,6 +112,17 @@ void cmdgpt::print_help()
         << "  --cache-stats           Display cache statistics and exit\n"
         << "\nToken Usage:\n"
         << "  --show-tokens           Display token usage and cost after response\n"
+        << "\nCustom Endpoints:\n"
+        << "  --endpoint URL          Use custom API endpoint (e.g., for local models)\n"
+        << "\nResponse History:\n"
+        << "  --history               Show recent history (last 10 entries)\n"
+        << "  --clear-history         Clear all history entries\n"
+        << "  --search-history QUERY  Search history by prompt content\n"
+        << "\nTemplate System:\n"
+        << "  --list-templates        List available prompt templates\n"
+        << "  --template NAME [VARS]  Use a template with variable substitution\n"
+        << "    Example: cmdgpt --template code-review \"$(cat main.cpp)\"\n"
+        << "    Example: cmdgpt --template refactor \"$(cat utils.js)\" \"modularity\"\n"
         << "\nprompt:\n"
         << "  The text prompt to send to the OpenAI GPT API. If not provided, the program\n"
         << "  will read from stdin (unless in interactive mode).\n"
@@ -266,6 +278,29 @@ void cmdgpt::Config::set_log_level(spdlog::level::level_enum level)
     log_level_ = level;
 }
 
+void cmdgpt::Config::set_endpoint(std::string_view endpoint)
+{
+    if (endpoint.empty())
+    {
+        endpoint_.clear();
+        return;
+    }
+
+    // Basic URL validation
+    if (endpoint.length() > 4096)
+    {
+        throw ValidationException("Endpoint URL too long");
+    }
+
+    // Must start with http:// or https://
+    if (endpoint.find("http://") != 0 && endpoint.find("https://") != 0)
+    {
+        throw ValidationException("Endpoint must start with http:// or https://");
+    }
+
+    endpoint_ = endpoint;
+}
+
 void cmdgpt::Config::load_from_environment()
 {
     // Load configuration from environment variables
@@ -344,6 +379,42 @@ void cmdgpt::Config::validate() const
 // ============================================================================
 
 /**
+ * @brief Extract server URL and API path from endpoint configuration
+ * @param config The configuration containing endpoint info
+ * @return Pair of (server_url, api_path)
+ */
+static std::pair<std::string, std::string> extract_endpoint_info(const cmdgpt::Config& config)
+{
+    std::string server_url;
+    std::string api_path;
+
+    if (!config.endpoint().empty())
+    {
+        // Parse custom endpoint URL
+        std::string endpoint = config.endpoint();
+        size_t path_start = endpoint.find('/', 8); // Skip http:// or https://
+        if (path_start != std::string::npos)
+        {
+            server_url = endpoint.substr(0, path_start);
+            api_path = endpoint.substr(path_start);
+        }
+        else
+        {
+            server_url = endpoint;
+            api_path = "/v1/chat/completions"; // Default path
+        }
+    }
+    else
+    {
+        // Use default OpenAI endpoint
+        server_url = std::string(cmdgpt::SERVER_URL);
+        api_path = std::string(cmdgpt::API_URL);
+    }
+
+    return {server_url, api_path};
+}
+
+/**
  * @brief Sends a chat completion request to the OpenAI API
  *
  * @param prompt The user's input prompt
@@ -401,6 +472,9 @@ std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, std::string_v
                     {std::string(CONTENT_KEY), actual_system_prompt}},
                    {{std::string(ROLE_KEY), std::string(USER_ROLE)},
                     {std::string(CONTENT_KEY), std::string(prompt)}}}}};
+
+    // Apply rate limiting before making request
+    get_rate_limiter().acquire();
 
     // Initialize the HTTP client with security settings
     httplib::Client cli{std::string(SERVER_URL)};
@@ -545,6 +619,11 @@ std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, const Config&
         if (!cached_response.empty())
         {
             gLogger->info("Using cached response for prompt");
+
+            // Record in history (with empty token usage for cached responses)
+            auto& history = get_response_history();
+            history.add_entry(prompt, cached_response, config.model(), TokenUsage{}, true);
+
             return cached_response;
         }
     }
@@ -560,6 +639,11 @@ std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, const Config&
         std::string cache_key = cache.generate_key(prompt, config.model(), config.system_prompt());
         cache.put(cache_key, response);
     }
+
+    // Record in history
+    // Note: Token usage will be parsed from the response in a future update
+    auto& history = get_response_history();
+    history.add_entry(prompt, response, config.model(), TokenUsage{}, false);
 
     return response;
 }
@@ -784,8 +868,12 @@ std::string cmdgpt::get_gpt_chat_response(const Conversation& conversation, cons
     // Create the JSON payload
     json data = {{std::string(MODEL_KEY), config.model()}, {std::string(MESSAGES_KEY), messages}};
 
-    // Initialize the HTTP client with security settings
-    httplib::Client cli{std::string(SERVER_URL)};
+    // Apply rate limiting before making request
+    get_rate_limiter().acquire();
+
+    // Initialize the HTTP client with custom endpoint support
+    auto [server_url, api_path] = extract_endpoint_info(config);
+    httplib::Client cli{server_url};
 
     // Set connection and read timeouts
     cli.set_connection_timeout(CONNECTION_TIMEOUT_SECONDS, 0);
@@ -798,7 +886,7 @@ std::string cmdgpt::get_gpt_chat_response(const Conversation& conversation, cons
     gLogger->debug("Debug: Sending conversation request with {} messages", messages.size());
 
     // Send the POST request
-    auto res = cli.Post(std::string(API_URL), headers, data.dump(), std::string(APPLICATION_JSON));
+    auto res = cli.Post(api_path, headers, data.dump(), std::string(APPLICATION_JSON));
 
     // Check if response was received
     if (!res)
@@ -1555,9 +1643,9 @@ cmdgpt::ResponseCache::ResponseCache(const std::filesystem::path& cache_dir,
     }
     catch (const std::filesystem::filesystem_error& e)
     {
-        // If we can't set permissions, log and continue
-        // This might happen in test environments
-        gLogger->debug("Could not set cache directory permissions: {}", e.what());
+        // Security: Fail if we cannot set secure permissions
+        throw std::runtime_error("Failed to set secure cache directory permissions: " +
+                                 std::string(e.what()));
     }
 }
 
@@ -1616,11 +1704,27 @@ std::filesystem::path cmdgpt::ResponseCache::get_cache_path(const std::string& k
         }
     }
 
-    // Ensure we stay within cache directory
+    // Ensure we stay within cache directory by using canonical paths
     auto cache_file = cache_dir_ / (key + ".json");
-    auto cache_file_str = cache_file.string();
-    auto cache_dir_str = cache_dir_.string();
-    if (cache_file_str.find(cache_dir_str) != 0)
+
+    // Resolve canonical paths to prevent symlink attacks
+    std::error_code ec;
+    auto canonical_cache_dir = std::filesystem::canonical(cache_dir_, ec);
+    if (ec)
+    {
+        throw SecurityException("Failed to resolve cache directory: " + ec.message());
+    }
+
+    // For the file, we need to check its parent since the file might not exist yet
+    auto cache_file_parent = cache_file.parent_path();
+    auto canonical_file_parent = std::filesystem::canonical(cache_file_parent, ec);
+    if (ec)
+    {
+        throw SecurityException("Failed to resolve cache file path: " + ec.message());
+    }
+
+    // Verify the file's parent directory is within our cache directory
+    if (canonical_file_parent.string().find(canonical_cache_dir.string()) != 0)
     {
         throw SecurityException("Cache path escape attempt detected");
     }
@@ -1962,4 +2066,632 @@ std::string cmdgpt::format_token_usage(const TokenUsage& usage)
     }
 
     return ss.str();
+}
+
+// ============================================================================
+// Response History Implementation
+// ============================================================================
+
+#include <ctime>
+#include <iomanip>
+
+/**
+ * @brief ResponseHistory constructor
+ */
+cmdgpt::ResponseHistory::ResponseHistory(const std::filesystem::path& history_file,
+                                         size_t max_entries)
+    : max_entries_(max_entries)
+{
+    if (history_file.empty())
+    {
+        // Default to ~/.cmdgpt/history.json
+        const char* home = std::getenv("HOME");
+        if (!home)
+        {
+            throw ConfigurationException("HOME environment variable not set");
+        }
+        history_file_ = std::filesystem::path(home) / ".cmdgpt" / "history.json";
+    }
+    else
+    {
+        history_file_ = history_file;
+    }
+
+    // Create directory if it doesn't exist
+    std::filesystem::create_directories(history_file_.parent_path());
+
+    // Load existing history
+    try
+    {
+        load();
+    }
+    catch (const std::exception& e)
+    {
+        gLogger->debug("Could not load history: {}", e.what());
+    }
+}
+
+/**
+ * @brief Add an entry to the history
+ */
+void cmdgpt::ResponseHistory::add_entry(std::string_view prompt, std::string_view response,
+                                        std::string_view model, const TokenUsage& usage,
+                                        bool from_cache)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // Get current timestamp
+    auto now = std::chrono::system_clock::now();
+    auto time_t = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::gmtime(&time_t), "%Y-%m-%dT%H:%M:%SZ");
+
+    Entry entry{ss.str(), std::string(prompt), std::string(response), std::string(model),
+                usage,    from_cache};
+
+    entries_.push_back(std::move(entry));
+
+    // Trim if necessary
+    if (max_entries_ > 0 && entries_.size() > max_entries_)
+    {
+        entries_.erase(entries_.begin(), entries_.begin() + (entries_.size() - max_entries_));
+    }
+
+    // Auto-save
+    try
+    {
+        save();
+    }
+    catch (const std::exception& e)
+    {
+        gLogger->error("Failed to save history: {}", e.what());
+    }
+}
+
+/**
+ * @brief Get recent history entries
+ */
+std::vector<cmdgpt::ResponseHistory::Entry> cmdgpt::ResponseHistory::get_recent(size_t count) const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (entries_.empty())
+        return {};
+
+    size_t start_idx = entries_.size() > count ? entries_.size() - count : 0;
+    return std::vector<Entry>(entries_.begin() + start_idx, entries_.end());
+}
+
+/**
+ * @brief Search history by prompt content
+ */
+std::vector<cmdgpt::ResponseHistory::Entry>
+cmdgpt::ResponseHistory::search(std::string_view query) const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    std::vector<Entry> results;
+    std::string query_lower(query);
+    std::transform(query_lower.begin(), query_lower.end(), query_lower.begin(), ::tolower);
+
+    for (const auto& entry : entries_)
+    {
+        std::string prompt_lower = entry.prompt;
+        std::transform(prompt_lower.begin(), prompt_lower.end(), prompt_lower.begin(), ::tolower);
+
+        if (prompt_lower.find(query_lower) != std::string::npos)
+        {
+            results.push_back(entry);
+        }
+    }
+
+    return results;
+}
+
+/**
+ * @brief Clear all history
+ */
+size_t cmdgpt::ResponseHistory::clear()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    size_t count = entries_.size();
+    entries_.clear();
+
+    // Save empty history
+    try
+    {
+        save();
+    }
+    catch (const std::exception& e)
+    {
+        gLogger->error("Failed to save cleared history: {}", e.what());
+    }
+
+    return count;
+}
+
+/**
+ * @brief Save history to file
+ */
+void cmdgpt::ResponseHistory::save() const
+{
+    json j = json::array();
+
+    for (const auto& entry : entries_)
+    {
+        j.push_back({{"timestamp", entry.timestamp},
+                     {"prompt", entry.prompt},
+                     {"response", entry.response},
+                     {"model", entry.model},
+                     {"token_usage",
+                      {{"prompt_tokens", entry.token_usage.prompt_tokens},
+                       {"completion_tokens", entry.token_usage.completion_tokens},
+                       {"total_tokens", entry.token_usage.total_tokens},
+                       {"estimated_cost", entry.token_usage.estimated_cost}}},
+                     {"from_cache", entry.from_cache}});
+    }
+
+    std::ofstream file(history_file_);
+    if (!file)
+    {
+        throw std::runtime_error("Failed to open history file for writing: " +
+                                 history_file_.string());
+    }
+
+    file << j.dump(2);
+}
+
+/**
+ * @brief Load history from file
+ */
+void cmdgpt::ResponseHistory::load()
+{
+    if (!std::filesystem::exists(history_file_))
+        return;
+
+    std::ifstream file(history_file_);
+    if (!file)
+    {
+        throw std::runtime_error("Failed to open history file for reading: " +
+                                 history_file_.string());
+    }
+
+    json j;
+    file >> j;
+
+    entries_.clear();
+    for (const auto& item : j)
+    {
+        Entry entry{
+            item["timestamp"].get<std::string>(),
+            item["prompt"].get<std::string>(),
+            item["response"].get<std::string>(),
+            item["model"].get<std::string>(),
+            TokenUsage{static_cast<size_t>(item["token_usage"]["prompt_tokens"].get<int>()),
+                       static_cast<size_t>(item["token_usage"]["completion_tokens"].get<int>()),
+                       static_cast<size_t>(item["token_usage"]["total_tokens"].get<int>()),
+                       item["token_usage"]["estimated_cost"].get<double>()},
+            item["from_cache"].get<bool>()};
+        entries_.push_back(std::move(entry));
+    }
+}
+
+/**
+ * @brief Get singleton ResponseHistory instance
+ */
+cmdgpt::ResponseHistory& cmdgpt::get_response_history()
+{
+    static ResponseHistory history;
+    return history;
+}
+
+// ============================================================================
+// Template Manager Implementation
+// ============================================================================
+
+#include <regex>
+
+/**
+ * @brief TemplateManager constructor
+ */
+cmdgpt::TemplateManager::TemplateManager(const std::filesystem::path& template_file)
+{
+    if (template_file.empty())
+    {
+        // Default to ~/.cmdgpt/templates.json
+        const char* home = std::getenv("HOME");
+        if (!home)
+        {
+            throw ConfigurationException("HOME environment variable not set");
+        }
+        template_file_ = std::filesystem::path(home) / ".cmdgpt" / "templates.json";
+    }
+    else
+    {
+        template_file_ = template_file;
+    }
+
+    // Create directory if it doesn't exist
+    std::filesystem::create_directories(template_file_.parent_path());
+
+    // Initialize built-in templates
+    init_builtin_templates();
+
+    // Load user templates
+    try
+    {
+        load();
+    }
+    catch (const std::exception& e)
+    {
+        gLogger->debug("Could not load templates: {}", e.what());
+    }
+}
+
+/**
+ * @brief Initialize built-in templates
+ */
+void cmdgpt::TemplateManager::init_builtin_templates()
+{
+    // Code review template
+    add_template("code-review", "Review code for bugs, style, and improvements",
+                 "Please review the following code:\n\n{{code}}\n\n"
+                 "Check for:\n"
+                 "1. Bugs and potential errors\n"
+                 "2. Code style and best practices\n"
+                 "3. Performance improvements\n"
+                 "4. Security issues\n"
+                 "5. Suggestions for improvement");
+
+    // Explain code template
+    add_template("explain", "Explain how code works",
+                 "Please explain how the following code works:\n\n{{code}}\n\n"
+                 "Include:\n"
+                 "1. Overall purpose\n"
+                 "2. Step-by-step breakdown\n"
+                 "3. Key concepts used\n"
+                 "4. Any potential issues");
+
+    // Refactor template
+    add_template("refactor", "Refactor code for better quality",
+                 "Please refactor the following code:\n\n{{code}}\n\n"
+                 "Focus on:\n"
+                 "1. {{focus}}\n"
+                 "2. Maintaining functionality\n"
+                 "3. Improving readability\n"
+                 "4. Following best practices");
+
+    // Generate docs template
+    add_template("docs", "Generate documentation for code",
+                 "Please generate {{style}} documentation for:\n\n{{code}}\n\n"
+                 "Include appropriate comments and docstrings.");
+
+    // Fix error template
+    add_template("fix-error", "Help fix an error",
+                 "I'm getting this error:\n\n{{error}}\n\n"
+                 "From this code:\n\n{{code}}\n\n"
+                 "Please help me fix it.");
+
+    // Unit test template
+    add_template("unit-test", "Generate unit tests",
+                 "Please generate unit tests for:\n\n{{code}}\n\n"
+                 "Use {{framework}} framework and include edge cases.");
+}
+
+/**
+ * @brief Extract variable names from template content
+ */
+std::vector<std::string> cmdgpt::TemplateManager::extract_variables(std::string_view content)
+{
+    std::vector<std::string> variables;
+    std::regex var_regex(R"(\{\{(\w+)\}\})");
+    std::string content_str(content);
+
+    std::sregex_iterator it(content_str.begin(), content_str.end(), var_regex);
+    std::sregex_iterator end;
+
+    std::set<std::string> unique_vars;
+    for (; it != end; ++it)
+    {
+        unique_vars.insert((*it)[1].str());
+    }
+
+    variables.assign(unique_vars.begin(), unique_vars.end());
+    return variables;
+}
+
+/**
+ * @brief Add or update a template
+ */
+void cmdgpt::TemplateManager::add_template(std::string_view name, std::string_view description,
+                                           std::string_view content)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    Template templ{std::string(name), std::string(description), std::string(content),
+                   extract_variables(content)};
+
+    templates_[std::string(name)] = std::move(templ);
+
+    // Don't auto-save built-in templates
+    static const std::set<std::string> builtin_names = {"code-review", "explain",   "refactor",
+                                                        "docs",        "fix-error", "unit-test"};
+
+    if (builtin_names.find(std::string(name)) == builtin_names.end())
+    {
+        try
+        {
+            save();
+        }
+        catch (const std::exception& e)
+        {
+            gLogger->error("Failed to save templates: {}", e.what());
+        }
+    }
+}
+
+/**
+ * @brief Get a template by name
+ */
+std::optional<cmdgpt::TemplateManager::Template>
+cmdgpt::TemplateManager::get_template(std::string_view name) const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = templates_.find(std::string(name));
+    if (it != templates_.end())
+    {
+        return it->second;
+    }
+    return std::nullopt;
+}
+
+/**
+ * @brief Remove a template
+ */
+bool cmdgpt::TemplateManager::remove_template(std::string_view name)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // Don't remove built-in templates
+    static const std::set<std::string> builtin_names = {"code-review", "explain",   "refactor",
+                                                        "docs",        "fix-error", "unit-test"};
+
+    if (builtin_names.find(std::string(name)) != builtin_names.end())
+    {
+        return false;
+    }
+
+    auto it = templates_.find(std::string(name));
+    if (it != templates_.end())
+    {
+        templates_.erase(it);
+
+        try
+        {
+            save();
+        }
+        catch (const std::exception& e)
+        {
+            gLogger->error("Failed to save templates: {}", e.what());
+        }
+
+        return true;
+    }
+    return false;
+}
+
+/**
+ * @brief List all templates
+ */
+std::vector<cmdgpt::TemplateManager::Template> cmdgpt::TemplateManager::list_templates() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    std::vector<Template> result;
+    for (const auto& [name, templ] : templates_)
+    {
+        result.push_back(templ);
+    }
+    return result;
+}
+
+/**
+ * @brief Apply template with variable substitution
+ */
+std::string
+cmdgpt::TemplateManager::apply_template(std::string_view name,
+                                        const std::map<std::string, std::string>& variables) const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = templates_.find(std::string(name));
+    if (it == templates_.end())
+    {
+        throw std::runtime_error("Template not found: " + std::string(name));
+    }
+
+    const Template& templ = it->second;
+    std::string result = templ.content;
+
+    // Check that all required variables are provided
+    for (const auto& var : templ.variables)
+    {
+        if (variables.find(var) == variables.end())
+        {
+            throw std::runtime_error("Missing variable: " + var);
+        }
+    }
+
+    // Replace variables
+    for (const auto& [var_name, var_value] : variables)
+    {
+        std::string placeholder = "{{" + var_name + "}}";
+        size_t pos = 0;
+        while ((pos = result.find(placeholder, pos)) != std::string::npos)
+        {
+            result.replace(pos, placeholder.length(), var_value);
+            pos += var_value.length();
+        }
+    }
+
+    return result;
+}
+
+/**
+ * @brief Save templates to file
+ */
+void cmdgpt::TemplateManager::save() const
+{
+    json j = json::object();
+
+    // Only save non-built-in templates
+    static const std::set<std::string> builtin_names = {"code-review", "explain",   "refactor",
+                                                        "docs",        "fix-error", "unit-test"};
+
+    for (const auto& [name, templ] : templates_)
+    {
+        if (builtin_names.find(name) == builtin_names.end())
+        {
+            j[name] = {{"description", templ.description}, {"content", templ.content}};
+        }
+    }
+
+    std::ofstream file(template_file_);
+    if (!file)
+    {
+        throw std::runtime_error("Failed to open template file for writing: " +
+                                 template_file_.string());
+    }
+
+    file << j.dump(2);
+}
+
+/**
+ * @brief Load templates from file
+ */
+void cmdgpt::TemplateManager::load()
+{
+    if (!std::filesystem::exists(template_file_))
+        return;
+
+    std::ifstream file(template_file_);
+    if (!file)
+    {
+        throw std::runtime_error("Failed to open template file for reading: " +
+                                 template_file_.string());
+    }
+
+    json j;
+    file >> j;
+
+    for (auto& [name, data] : j.items())
+    {
+        add_template(name, data["description"].get<std::string>(),
+                     data["content"].get<std::string>());
+    }
+}
+
+/**
+ * @brief Get singleton TemplateManager instance
+ */
+cmdgpt::TemplateManager& cmdgpt::get_template_manager()
+{
+    static TemplateManager manager;
+    return manager;
+}
+
+// ============================================================================
+// RateLimiter Implementation
+// ============================================================================
+
+/**
+ * @brief Construct rate limiter with specified limit
+ */
+cmdgpt::RateLimiter::RateLimiter(double requests_per_second, size_t burst_size)
+    : tokens_(burst_size > 0 ? static_cast<double>(burst_size) : requests_per_second),
+      max_tokens_(burst_size > 0 ? static_cast<double>(burst_size) : requests_per_second),
+      refill_rate_(requests_per_second), last_refill_(std::chrono::steady_clock::now())
+{
+    if (requests_per_second <= 0)
+    {
+        throw std::invalid_argument("Requests per second must be positive");
+    }
+}
+
+/**
+ * @brief Refill tokens based on elapsed time
+ */
+void cmdgpt::RateLimiter::refill()
+{
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_refill_);
+
+    double tokens_to_add = (elapsed.count() / 1000.0) * refill_rate_;
+    tokens_ = std::min(tokens_ + tokens_to_add, max_tokens_);
+    last_refill_ = now;
+}
+
+/**
+ * @brief Acquire permission to make a request
+ */
+void cmdgpt::RateLimiter::acquire()
+{
+    std::unique_lock<std::mutex> lock(mutex_);
+
+    while (true)
+    {
+        refill();
+
+        if (tokens_ >= 1.0)
+        {
+            tokens_ -= 1.0;
+            return;
+        }
+
+        // Calculate wait time until next token
+        double tokens_needed = 1.0 - tokens_;
+        auto wait_ms =
+            std::chrono::milliseconds(static_cast<int64_t>((tokens_needed / refill_rate_) * 1000));
+
+        cv_.wait_for(lock, wait_ms);
+    }
+}
+
+/**
+ * @brief Try to acquire permission without blocking
+ */
+bool cmdgpt::RateLimiter::try_acquire()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    refill();
+
+    if (tokens_ >= 1.0)
+    {
+        tokens_ -= 1.0;
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * @brief Get current available tokens
+ */
+size_t cmdgpt::RateLimiter::available_tokens() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    const_cast<RateLimiter*>(this)->refill();
+    return static_cast<size_t>(tokens_);
+}
+
+/**
+ * @brief Get singleton RateLimiter instance
+ */
+cmdgpt::RateLimiter& cmdgpt::get_rate_limiter()
+{
+    // Default: 3 requests per second with burst of 5
+    static RateLimiter limiter(3.0, 5);
+    return limiter;
 }

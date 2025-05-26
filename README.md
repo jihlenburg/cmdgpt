@@ -2,7 +2,7 @@
 
 [![Build and Test](https://github.com/jihlenburg/cmdgpt/actions/workflows/build.yml/badge.svg)](https://github.com/jihlenburg/cmdgpt/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.5.0--dev-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.5.0-blue.svg)](CHANGELOG.md)
 
 CmdGPT is a command-line interface (CLI) tool designed to interact with the OpenAI GPT API. It enables users to send prompts and receive responses from GPT models directly from the terminal.
 
@@ -26,6 +26,12 @@ CmdGPT is a command-line interface (CLI) tool designed to interact with the Open
 - 🐚 Enhanced shell integration with completion scripts
 - 📥 Multi-line input support from pipes and files
 - 🔗 Combined stdin and prompt support for powerful command chaining
+- 💸 Response caching to avoid duplicate API calls and save costs
+- 🌐 Custom API endpoint support for local models and alternative services
+- 📊 Response history tracking with search capabilities
+- 📋 Template system for reusable prompts with variable substitution
+- 💰 Token usage tracking (infrastructure ready)
+- 🚦 Rate limiting to prevent API overload and improve stability
 
 ## Prerequisites
 
@@ -105,6 +111,27 @@ export OPENAI_API_KEY="your-api-key"
 ./cmdgpt -f json "List 3 programming languages"
 ./cmdgpt -f markdown "Create a simple README template"
 ./cmdgpt -f code "Write a fibonacci function in Python"
+
+# Caching features
+./cmdgpt --no-cache "What is the weather?"  # Bypass cache
+./cmdgpt --clear-cache                       # Clear all cached responses
+./cmdgpt --cache-stats                       # Show cache statistics
+
+# Custom endpoints
+./cmdgpt --endpoint "http://localhost:8080/v1/chat/completions" "Hello"
+
+# Response history
+./cmdgpt --history                           # Show recent history
+./cmdgpt --search-history "python"           # Search history
+./cmdgpt --clear-history                     # Clear history
+
+# Templates
+./cmdgpt --list-templates                    # List available templates
+./cmdgpt --template code-review "$(cat main.cpp)"
+./cmdgpt --template refactor "$(cat utils.js)" "modularity"
+
+# Token usage
+./cmdgpt --show-tokens "Explain AI"          # Display token usage after response
 ```
 
 ### Example Scripts
@@ -144,6 +171,16 @@ See [examples/README.md](examples/README.md) for detailed documentation.
 | `-m` | `--gpt_model` | Choose GPT model (default: gpt-4-turbo-preview) |
 | `-l` | `--log_file` | Specify log file path |
 | `-L` | `--log_level` | Set log level (TRACE, DEBUG, INFO, WARN, ERROR, CRITICAL) |
+| | `--no-cache` | Bypass cache for this request |
+| | `--clear-cache` | Clear all cached responses and exit |
+| | `--cache-stats` | Display cache statistics and exit |
+| | `--endpoint` | Use custom API endpoint URL |
+| | `--history` | Show recent response history |
+| | `--clear-history` | Clear all history entries |
+| | `--search-history` | Search history by prompt content |
+| | `--list-templates` | List available prompt templates |
+| | `--template` | Use a template with variable substitution |
+| | `--show-tokens` | Display token usage after response |
 
 ### Environment Variables
 
@@ -151,7 +188,7 @@ See [examples/README.md](examples/README.md) for detailed documentation.
 |----------|-------------|---------|
 | `OPENAI_API_KEY` | Your OpenAI API key | (required) |
 | `OPENAI_SYS_PROMPT` | System prompt for the model | "You are a helpful assistant!" |
-| `OPENAI_GPT_MODEL` | GPT model to use | "gpt-4-turbo-preview" |
+| `OPENAI_GPT_MODEL` | GPT model to use | "gpt-4" |
 | `CMDGPT_LOG_FILE` | Log file path | "logfile.txt" |
 | `CMDGPT_LOG_LEVEL` | Logging level | "WARN" |
 

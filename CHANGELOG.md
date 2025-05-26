@@ -5,7 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - v0.5.0-dev
+## [Unreleased]
+
+### Added
+- Rate limiting system to prevent API overload
+  - Token bucket algorithm with configurable rate and burst capacity
+  - Default: 3 requests/second with burst of 5
+  - Thread-safe implementation with condition variables
+  - Prevents concurrent request timeouts
+- Asynchronous logging for improved performance
+  - Thread pool with queue size of 8192
+  - Non-blocking I/O prevents delays on TRACE level
+  - Flush only on errors for better performance
+
+### Security
+- Enhanced path traversal protection using canonical path resolution
+- Fail-fast on insecure cache directory permissions
+- Improved thread safety in rate limiter implementation
+
+### Fixed
+- Concurrent request timeout issues
+- TRACE level logging performance problems
+- Config file processing delays
+
+## [0.5.0] - 2025-05-26
 
 ### Added
 - Response caching system to avoid duplicate API calls
@@ -15,25 +38,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `--no-cache` flag to bypass cache for current request
   - `--clear-cache` command to clear all cached responses
   - `--cache-stats` command to display cache statistics
+- Custom API endpoint support
+  - `--endpoint URL` flag to use alternative API endpoints
+  - Support for local models and OpenAI-compatible services
+  - Automatic URL parsing for server and path components
+- Response history tracking
+  - Automatic persistence to ~/.cmdgpt/history.json
+  - `--history` command to show recent history (last 10 entries)
+  - `--clear-history` command to clear all history
+  - `--search-history QUERY` to search history by prompt content
+  - Token usage and cache status tracking per entry
+- Template system for reusable prompts
+  - Built-in templates for common tasks (code review, explain, refactor, docs, fix-error, unit-test)
+  - `--list-templates` to show available templates
+  - `--template NAME [VARS]` to use templates with variable substitution
+  - Custom user templates stored in ~/.cmdgpt/templates.json
+  - Variable extraction and validation
 - Token usage tracking infrastructure
   - `TokenUsage` struct for tracking prompt/completion tokens and costs
   - `--show-tokens` flag to display token usage after responses
-  - Model-specific pricing calculations
+  - Model-specific pricing calculations (Note: full integration pending)
 - Security improvements
   - Cache directory with restricted permissions (700)
   - Path traversal protection in cache operations
   - Atomic file writes to prevent corruption
-  - Input validation for cache keys
+  - Input validation for cache keys and endpoints
+  - API key security audit and improved handling
 
 ### Security
 - Fixed potential path traversal vulnerability in cache file operations
-- Added secure file permissions for cache directory
+- Added secure file permissions for cache directory and history
 - Implemented cache size limits to prevent disk exhaustion attacks
-- Added validation for cache key format
+- Added validation for cache key format and endpoint URLs
+- Ensured API keys are never logged or stored in cache
 
 ### Changed
-- Enhanced Config class with cache and token display settings
+- Enhanced Config class with cache, token display, and endpoint settings
 - Improved error handling with new SecurityException type
+- Refactored API communication to support custom endpoints
+- Updated help text with comprehensive feature documentation
+
+### Fixed
+- Code quality issues identified by static analysis
+- Variable shadowing in template display code
+- Type conversion warnings in history loading
 
 ## [0.4.2] - 2025-05-26
 

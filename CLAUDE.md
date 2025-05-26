@@ -63,12 +63,19 @@ The tool supports command-line arguments, environment variables, and configurati
 - Logs are written to `logfile.txt` by default
 - Interactive mode commands: /help, /clear, /save, /load, /exit
 - Output formats: plain, json, markdown, code
-- Security features: input validation, certificate verification, API key redaction
+- Security features: input validation, certificate verification, API key redaction, path traversal protection, secure file permissions, canonical path resolution
 - Documentation: Doxygen with call graphs (requires Graphviz)
 - Streaming mode: --stream flag for simulated real-time output
 - Auto-retry: Exponential backoff for rate limits (429) and server errors (5xx)
 - Error recovery: Automatic conversation saving and restoration in interactive mode
 - Shell integration: Completion scripts for bash/zsh, multi-line pipe input support
+- Response caching: SHA256-based keys, 24-hour expiration, size limits (100MB/1000 entries)
+- Custom endpoints: --endpoint flag for alternative API servers
+- Response history: Persistent tracking with search, stored in ~/.cmdgpt/history.json
+- Template system: Built-in and custom templates with {{variable}} substitution
+- Token tracking: Usage statistics and cost estimation (full display pending)
+- Rate limiting: Token bucket algorithm with 3 req/sec limit and burst capacity of 5
+- Async logging: Thread pool for non-blocking I/O on TRACE level logging
 
 ## Coding Style
 
