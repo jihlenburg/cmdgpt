@@ -283,6 +283,10 @@ class ValidationException : public CmdGptException
  * - Suspicious input patterns
  * - Permission violations
  * - Cache tampering attempts
+ * - Invalid or malicious input that could compromise system security
+ * 
+ * This exception indicates a serious security concern that should be
+ * logged and handled appropriately to prevent potential exploits.
  */
 class SecurityException : public CmdGptException
 {
@@ -407,6 +411,10 @@ class Config
 
     /**
      * @brief Enable or disable response caching
+     * 
+     * When enabled, API responses are cached to disk to avoid redundant
+     * API calls for identical requests.
+     * 
      * @param enable True to enable caching, false to disable
      */
     void set_cache_enabled(bool enable) noexcept
@@ -415,8 +423,9 @@ class Config
     }
 
     /**
-     * @brief Check if caching is enabled
-     * @return True if caching is enabled
+     * @brief Check if response caching is enabled
+     * 
+     * @return True if caching is enabled, false otherwise
      */
     bool cache_enabled() const noexcept
     {
@@ -425,6 +434,10 @@ class Config
 
     /**
      * @brief Enable or disable token usage display
+     * 
+     * When enabled, token count and estimated cost are displayed
+     * after each API response.
+     * 
      * @param enable True to show token usage, false to hide
      */
     void set_show_tokens(bool enable) noexcept
@@ -434,7 +447,8 @@ class Config
 
     /**
      * @brief Check if token usage display is enabled
-     * @return True if token usage should be shown
+     * 
+     * @return True if token usage should be shown, false otherwise
      */
     bool show_tokens() const noexcept
     {
@@ -883,23 +897,29 @@ ResponseCache& get_response_cache();
 
 /**
  * @brief Token usage information from API response
+ * 
+ * Tracks the number of tokens consumed by an API request and calculates
+ * the estimated cost based on the model's pricing.
  */
 struct TokenUsage
 {
-    size_t prompt_tokens = 0;     ///< Tokens in the prompt
-    size_t completion_tokens = 0; ///< Tokens in the completion
-    size_t total_tokens = 0;      ///< Total tokens used
-    double estimated_cost = 0.0;  ///< Estimated cost in USD
+    size_t prompt_tokens = 0;     ///< Number of tokens in the input prompt
+    size_t completion_tokens = 0; ///< Number of tokens in the generated completion
+    size_t total_tokens = 0;      ///< Total tokens used (prompt + completion)
+    double estimated_cost = 0.0;  ///< Estimated cost in USD based on model pricing
 };
 
 /**
  * @brief Complete API response including content and metadata
+ * 
+ * Encapsulates the full response from the API including the text content,
+ * token usage statistics, and cache status.
  */
 struct ApiResponse
 {
-    std::string content;     ///< The actual response text
-    TokenUsage token_usage;  ///< Token usage information
-    bool from_cache = false; ///< Whether response was from cache
+    std::string content;     ///< The actual response text from the API
+    TokenUsage token_usage;  ///< Token usage and cost information for this request
+    bool from_cache = false; ///< Whether this response was retrieved from cache (true) or API (false)
 };
 
 /**

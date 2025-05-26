@@ -1554,6 +1554,15 @@ cmdgpt::ResponseCache::ResponseCache(const std::filesystem::path& cache_dir, siz
 
 /**
  * @brief Generate SHA256 hash key from request parameters
+ * 
+ * Creates a unique cache key by hashing the combination of prompt,
+ * model, and system prompt. This ensures identical requests can be
+ * matched in the cache.
+ * 
+ * @param prompt The user's input prompt
+ * @param model The model name (e.g., "gpt-4")
+ * @param system_prompt The system prompt for context
+ * @return SHA256 hash as a 64-character hexadecimal string
  */
 std::string cmdgpt::ResponseCache::generate_key(std::string_view prompt, std::string_view model,
                                                std::string_view system_prompt) const
@@ -1577,6 +1586,14 @@ std::string cmdgpt::ResponseCache::generate_key(std::string_view prompt, std::st
 
 /**
  * @brief Get cache file path for a key
+ * 
+ * Validates the cache key and returns the full path to the cache file.
+ * Includes security checks to prevent path traversal attacks.
+ * 
+ * @param key The cache key (must be valid SHA256 hex string)
+ * @return Full path to the cache file
+ * @throws ValidationException if key contains invalid characters
+ * @throws SecurityException if path traversal is detected
  */
 std::filesystem::path cmdgpt::ResponseCache::get_cache_path(const std::string& key) const
 {
@@ -1603,6 +1620,11 @@ std::filesystem::path cmdgpt::ResponseCache::get_cache_path(const std::string& k
 
 /**
  * @brief Check if cache file is expired
+ * 
+ * Determines if a cache file has exceeded the expiration time.
+ * 
+ * @param path Path to the cache file
+ * @return True if file is older than expiration_hours_, false otherwise
  */
 bool cmdgpt::ResponseCache::is_expired(const std::filesystem::path& path) const
 {
@@ -1615,6 +1637,11 @@ bool cmdgpt::ResponseCache::is_expired(const std::filesystem::path& path) const
 
 /**
  * @brief Check if valid cache exists
+ * 
+ * Checks if a cache entry exists and is not expired.
+ * 
+ * @param key The cache key to check
+ * @return True if valid (non-expired) cache exists, false otherwise
  */
 bool cmdgpt::ResponseCache::has_valid_cache(const std::string& key) const
 {
@@ -1630,6 +1657,12 @@ bool cmdgpt::ResponseCache::has_valid_cache(const std::string& key) const
 
 /**
  * @brief Get cached response
+ * 
+ * Retrieves a cached response if it exists and is valid.
+ * Updates cache hit/miss statistics.
+ * 
+ * @param key The cache key to look up
+ * @return The cached response string, or empty string if not found/invalid
  */
 std::string cmdgpt::ResponseCache::get(const std::string& key) const
 {
@@ -1667,6 +1700,12 @@ std::string cmdgpt::ResponseCache::get(const std::string& key) const
 
 /**
  * @brief Store response in cache
+ * 
+ * Saves an API response to the cache with metadata. Enforces cache
+ * size limits and uses atomic writes to prevent corruption.
+ * 
+ * @param key The cache key for this response
+ * @param response The API response text to cache
  */
 void cmdgpt::ResponseCache::put(const std::string& key, std::string_view response)
 {
@@ -1723,6 +1762,10 @@ void cmdgpt::ResponseCache::put(const std::string& key, std::string_view respons
 
 /**
  * @brief Clear all cache entries
+ * 
+ * Removes all cached responses from the cache directory.
+ * 
+ * @return Number of cache entries that were removed
  */
 size_t cmdgpt::ResponseCache::clear()
 {
@@ -1749,6 +1792,10 @@ size_t cmdgpt::ResponseCache::clear()
 
 /**
  * @brief Clean expired cache entries
+ * 
+ * Removes cache files that have exceeded the expiration time.
+ * 
+ * @return Number of expired entries that were removed
  */
 size_t cmdgpt::ResponseCache::clean_expired()
 {
@@ -1775,6 +1822,11 @@ size_t cmdgpt::ResponseCache::clean_expired()
 
 /**
  * @brief Get cache statistics
+ * 
+ * Collects statistics about cache usage including hit/miss counts,
+ * number of entries, and total size.
+ * 
+ * @return Map containing statistics: "hits", "misses", "count", "size_bytes"
  */
 std::map<std::string, size_t> cmdgpt::ResponseCache::get_stats() const
 {
@@ -1809,6 +1861,11 @@ std::map<std::string, size_t> cmdgpt::ResponseCache::get_stats() const
 
 /**
  * @brief Get global cache instance
+ * 
+ * Returns a reference to the singleton ResponseCache instance.
+ * The cache is created on first access with default settings.
+ * 
+ * @return Reference to the global ResponseCache instance
  */
 cmdgpt::ResponseCache& cmdgpt::get_response_cache()
 {
@@ -1832,6 +1889,13 @@ static const std::map<std::string, std::pair<double, double>> MODEL_PRICING = {
 
 /**
  * @brief Parse token usage from API response
+ * 
+ * Extracts token usage information from the JSON response and
+ * calculates the estimated cost based on model pricing.
+ * 
+ * @param response_json The raw JSON response from the API
+ * @param model The model name used for pricing calculation
+ * @return TokenUsage struct with parsed values (zeros if parsing fails)
  */
 cmdgpt::TokenUsage cmdgpt::parse_token_usage(const std::string& response_json, std::string_view model)
 {
@@ -1868,6 +1932,12 @@ cmdgpt::TokenUsage cmdgpt::parse_token_usage(const std::string& response_json, s
 
 /**
  * @brief Format token usage for display
+ * 
+ * Creates a human-readable string representation of token usage
+ * including counts and estimated cost.
+ * 
+ * @param usage The TokenUsage struct to format
+ * @return Formatted string suitable for console output
  */
 std::string cmdgpt::format_token_usage(const TokenUsage& usage)
 {
