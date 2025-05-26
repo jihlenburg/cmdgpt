@@ -158,7 +158,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multiple output formats: plain, JSON, Markdown, code extraction (`-f`/`--format`)
 - Conversation history with save/load functionality in interactive mode
 - Comprehensive Doxygen documentation with call graphs
-- Documentation build script (`build_docs.sh`) with auto-install option
+- Documentation build script (`scripts/build_docs.sh`) with auto-install option
 - Enhanced security features:
   - Input validation for API keys and prompts
   - Certificate verification for HTTPS connections

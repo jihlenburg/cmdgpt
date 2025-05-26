@@ -42,7 +42,7 @@ cmake --build build
 ctest --test-dir build
 
 # Build documentation
-./build_docs.sh
+./scripts/build_docs.sh
 ```
 
 ### 2. Committing Changes
@@ -142,7 +142,7 @@ cmake --build build
 ctest --test-dir build --verbose
 
 # Build documentation
-./build_docs.sh --open  # Opens in browser
+./scripts/build_docs.sh --open  # Opens in browser
 ```
 
 ### Documentation
@@ -208,7 +208,7 @@ cmake --build build-release
    - Check CMake version: `cmake --version` (>= 3.10)
 
 2. **Documentation Warnings**
-   - Run `./build_docs.sh` to check for Doxygen warnings
+   - Run `./scripts/build_docs.sh` to check for Doxygen warnings
    - Ensure no duplicate @mainpage directives
 
 3. **Test Failures**

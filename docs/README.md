@@ -22,13 +22,13 @@ docs/
 ### Quick Build
 ```bash
 # From project root
-./build_docs.sh
+./scripts/build_docs.sh
 
 # Build and open in browser
-./build_docs.sh --open
+./scripts/build_docs.sh --open
 
 # Auto-install dependencies (macOS only)
-./build_docs.sh --auto-install --open
+./scripts/build_docs.sh --auto-install --open
 ```
 
 ### Manual Build

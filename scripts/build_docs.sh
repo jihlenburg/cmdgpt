@@ -3,6 +3,13 @@
 
 set -e
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# Change to project root directory
+cd "${PROJECT_ROOT}"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -94,15 +101,15 @@ else
 fi
 
 # Check if Doxyfile exists
-if [ ! -f "Doxyfile" ]; then
-    echo -e "${RED}Error: Doxyfile not found in current directory.${NC}"
-    echo "Please run this script from the cmdgpt root directory."
+if [ ! -f "docs/Doxyfile" ]; then
+    echo -e "${RED}Error: Doxyfile not found in docs directory.${NC}"
+    echo "Expected location: ${PROJECT_ROOT}/docs/Doxyfile"
     exit 1
 fi
 
 # Generate documentation
 echo -e "${GREEN}Generating documentation...${NC}"
-doxygen Doxyfile
+doxygen docs/Doxyfile
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}Documentation generated successfully!${NC}"

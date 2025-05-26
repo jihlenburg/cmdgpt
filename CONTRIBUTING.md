@@ -109,7 +109,7 @@ make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu || echo 1)
 3. **Test your changes**:
    ```bash
    # Run all quality checks
-   ./check_code_quality.sh
+   ./scripts/check_code_quality.sh
    
    # Or individually:
    ./scripts/run_clang_format.sh --check
@@ -261,14 +261,14 @@ TEST_CASE("validate_api_key rejects empty keys", "[validation]")
 ### Building Documentation
 
 ```bash
-./build_docs.sh --open
+./scripts/build_docs.sh --open
 ```
 
 ## Submitting Changes
 
 1. **Ensure all tests pass**:
    ```bash
-   ./check_code_quality.sh
+   ./scripts/check_code_quality.sh
    ```
 
 2. **Push to your fork**:

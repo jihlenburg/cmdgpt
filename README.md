@@ -306,6 +306,12 @@ cmdgpt/
 │   ├── cmdgpt-completion.bash    # Bash completion script
 │   ├── cmdgpt-completion.zsh     # Zsh completion script
 │   ├── install-completions.sh    # Completion installation script
+│   ├── build_docs.sh             # Documentation build script
+│   ├── check_code_quality.sh     # Code quality checks
+│   ├── quick_build.sh            # Quick development build
+│   ├── check_all.sh              # Run all checks
+│   ├── run_clang_format.sh       # Code formatting
+│   ├── run_cppcheck.sh           # Static analysis
 │   └── README.md     # Scripts documentation
 ├── examples/         # Usage examples
 │   ├── simple_query.sh           # Basic usage
@@ -319,6 +325,7 @@ cmdgpt/
 ├── docs/             # Documentation
 │   ├── images/       # Documentation images
 │   ├── mainpage.dox  # Documentation main page
+│   ├── Doxyfile      # Doxygen configuration
 │   └── README.md     # Documentation guide
 ├── build.sh          # Unified build script
 ├── CMakeLists.txt    # CMake configuration
@@ -326,8 +333,7 @@ cmdgpt/
 ├── README.md         # This file
 ├── CHANGELOG.md      # Version history
 ├── CLAUDE.md         # AI assistant guide
-├── Doxyfile          # Doxygen configuration
-└── build_docs.sh     # Documentation build script
+└── WORKFLOW.md       # Development workflow guide
 ```
 
 ### Code Style
@@ -356,16 +362,16 @@ The project uses Doxygen for API documentation generation:
 
 ```bash
 # Build documentation using the convenience script
-./build_docs.sh
+./scripts/build_docs.sh
 
 # Build and open in browser
-./build_docs.sh --open
+./scripts/build_docs.sh --open
 
 # Auto-install missing dependencies (macOS only)
-./build_docs.sh --auto-install
+./scripts/build_docs.sh --auto-install
 
 # Combine options
-./build_docs.sh --auto-install --open
+./scripts/build_docs.sh --auto-install --open
 
 # Build documentation using CMake
 cd build && make docs

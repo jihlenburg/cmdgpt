@@ -18,7 +18,7 @@ rm -rf build && mkdir build && cd build
 cmake .. && make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu || echo 1)
 
 # Build documentation
-./build_docs.sh
+./scripts/build_docs.sh
 
 # Build with linting and formatting checks
 cd build

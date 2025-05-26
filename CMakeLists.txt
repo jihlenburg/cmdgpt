@@ -100,7 +100,7 @@ find_package(Doxygen OPTIONAL_COMPONENTS dot mscgen dia)
 
 if(DOXYGEN_FOUND)
     # Set Doxygen input and output directories
-    set(DOXYGEN_IN ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile)
+    set(DOXYGEN_IN ${CMAKE_CURRENT_SOURCE_DIR}/docs/Doxyfile)
     set(DOXYGEN_OUT ${CMAKE_CURRENT_BINARY_DIR}/docs)
     
     # Create docs directory
@@ -121,7 +121,7 @@ if(DOXYGEN_FOUND)
     )
     
     message(STATUS "Doxygen found. You can build documentation with 'make docs'")
-    message(STATUS "Or use './build_docs.sh' for better formatting and automatic browser opening")
+    message(STATUS "Or use './scripts/build_docs.sh' for better formatting and automatic browser opening")
 else()
     message(WARNING "Doxygen not found. Documentation target will not be available")
     message(STATUS "To install Doxygen:")
