@@ -7,3 +7,6 @@ logfile.txt
 *.log
 BATCH*.md
 V0.5.0_STATUS.md
+*_STATUS.md
+*_PLAN.md
+*_SUMMARY.md
