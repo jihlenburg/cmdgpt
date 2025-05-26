@@ -2,7 +2,7 @@
 
 [![Build and Test](https://github.com/jihlenburg/cmdgpt/actions/workflows/build.yml/badge.svg)](https://github.com/jihlenburg/cmdgpt/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.3.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)](CHANGELOG.md)
 
 CmdGPT is a command-line interface (CLI) tool designed to interact with the OpenAI GPT API. It enables users to send prompts and receive responses from GPT models directly from the terminal.
 
@@ -20,6 +20,11 @@ CmdGPT is a command-line interface (CLI) tool designed to interact with the Open
 - 🖥️ Cross-platform support (Linux, macOS, Windows)
 - 📚 Comprehensive Doxygen documentation with call graphs
 - 🧪 Comprehensive test suite with Catch2
+- 🌊 Streaming responses (simulated) for better user experience
+- 🔄 Automatic retry with exponential backoff for rate limits
+- 💾 Automatic conversation recovery after errors
+- 🐚 Enhanced shell integration with completion scripts
+- 📥 Multi-line input support from pipes and files
 
 ## Prerequisites
 
@@ -101,6 +106,29 @@ export OPENAI_API_KEY="your-api-key"
 ./cmdgpt -f code "Write a fibonacci function in Python"
 ```
 
+### Example Scripts
+
+The `examples/` directory contains ready-to-use scripts demonstrating various features:
+
+```bash
+# Basic usage examples
+./examples/simple_query.sh
+
+# Streaming responses
+./examples/streaming_example.sh
+
+# Different output formats
+./examples/format_examples.sh
+
+# Unix pipe integration
+./examples/pipe_integration.sh
+
+# Automated code review
+./examples/code_reviewer.sh *.py
+```
+
+See [examples/README.md](examples/README.md) for detailed documentation.
+
 ### Command-Line Options
 
 | Option | Long Form | Description |
@@ -108,6 +136,7 @@ export OPENAI_API_KEY="your-api-key"
 | `-h` | `--help` | Show help message and exit |
 | `-v` | `--version` | Display version information |
 | `-i` | `--interactive` | Start interactive REPL mode |
+| | `--stream` | Enable streaming responses (simulated) |
 | `-f` | `--format` | Output format: plain, json, markdown, code (default: plain) |
 | `-k` | `--api_key` | Set OpenAI API key |
 | `-s` | `--sys_prompt` | Set system prompt for context |
@@ -131,9 +160,15 @@ export OPENAI_API_KEY="your-api-key"
 # Pipe input from another command
 echo "Translate to Spanish: Hello, world!" | ./cmdgpt
 
+# Multi-line input from a file
+cat my_code.py | ./cmdgpt "Review this Python code"
+
 # Use with shell scripting
 RESPONSE=$(./cmdgpt "Generate a random UUID")
 echo "Generated UUID: $RESPONSE"
+
+# Enable streaming for real-time output
+./cmdgpt --stream "Write a short story about a robot"
 
 # Enable debug logging
 ./cmdgpt -L DEBUG -l debug.log "Debug this prompt"
@@ -170,6 +205,36 @@ Interactive mode provides a REPL interface for continuous conversations:
 # /exit     - Exit interactive mode
 ```
 
+**Error Recovery**: If the API encounters an error during interactive mode, the conversation is automatically saved to `.cmdgpt_recovery.json`. You'll be prompted to restore it on the next session.
+
+### Shell Completion
+
+CmdGPT includes shell completion scripts for enhanced command-line experience:
+
+#### Bash Completion
+```bash
+# Install for current session
+source scripts/cmdgpt-completion.bash
+
+# Install permanently (add to ~/.bashrc)
+echo "source /path/to/cmdgpt/scripts/cmdgpt-completion.bash" >> ~/.bashrc
+```
+
+#### Zsh Completion
+```bash
+# Add to fpath (in ~/.zshrc)
+fpath+=(/path/to/cmdgpt/scripts)
+
+# Or copy to standard location
+cp scripts/cmdgpt-completion.zsh /usr/local/share/zsh/site-functions/_cmdgpt
+```
+
+The completion scripts provide:
+- Option name completion
+- Format option values (plain, json, markdown, code)
+- Model name suggestions
+- Log level completions
+
 ## Exit Status Codes
 
 The tool follows standard Unix exit codes:
@@ -192,7 +257,26 @@ cmdgpt/
 ├── cmdgpt.cpp        # Core implementation
 ├── main.cpp          # CLI entry point
 ├── tests/            # Test suite
-│   └── cmdgpt_tests.cpp
+│   ├── cmdgpt_tests.cpp
+│   └── README.md     # Testing guide
+├── scripts/          # Utility scripts
+│   ├── cmdgpt-completion.bash    # Bash completion script
+│   ├── cmdgpt-completion.zsh     # Zsh completion script
+│   ├── install-completions.sh    # Completion installation script
+│   └── README.md     # Scripts documentation
+├── examples/         # Usage examples
+│   ├── simple_query.sh           # Basic usage
+│   ├── streaming_example.sh      # Streaming demo
+│   ├── format_examples.sh        # Output formats
+│   ├── pipe_integration.sh       # Unix pipe usage
+│   ├── code_reviewer.sh          # Automated reviews
+│   └── README.md     # Examples guide
+├── build/            # Build artifacts (generated)
+│   └── README.md     # Build directory info
+├── docs/             # Documentation
+│   ├── images/       # Documentation images
+│   ├── mainpage.dox  # Documentation main page
+│   └── README.md     # Documentation guide
 ├── build.sh          # Unified build script
 ├── CMakeLists.txt    # CMake configuration
 ├── LICENSE           # MIT License
@@ -200,10 +284,7 @@ cmdgpt/
 ├── CHANGELOG.md      # Version history
 ├── CLAUDE.md         # AI assistant guide
 ├── Doxyfile          # Doxygen configuration
-├── build_docs.sh     # Documentation build script
-└── docs/             # Generated documentation (after build)
-    ├── images/       # Documentation images
-    └── mainpage.dox  # Documentation main page
+└── build_docs.sh     # Documentation build script
 ```
 
 ### Code Style
@@ -259,11 +340,20 @@ The documentation includes:
 
 ### Contributing
 
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on:
+
+- Development setup
+- Coding standards
+- Testing requirements
+- Submission process
+
+Quick steps:
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+3. Make your changes and test them
+4. Commit your changes (`git commit -m 'feat: add amazing feature'`)
+5. Push to the branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
 
 ## Dependencies
 

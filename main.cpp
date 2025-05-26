@@ -43,6 +43,7 @@ SOFTWARE.
 #include <stdexcept>
 #include <string>
 #include <sysexits.h>
+#include <unistd.h>
 
 /**
  * @brief Parses command-line arguments and environment variables
@@ -103,8 +104,8 @@ int main(int argc, const char* const argv[])
         }
         else if (arg == "--stream")
         {
-            // Streaming mode not yet implemented
-            std::cerr << "Warning: Streaming mode is not yet implemented" << std::endl;
+            streaming_mode = true;
+            config.set_streaming_mode(true);
         }
         else if (arg == "-f" || arg == "--format")
         {
@@ -272,21 +273,75 @@ int main(int argc, const char* const argv[])
     // Get prompt from stdin if not provided
     if (prompt.empty())
     {
-        if (!std::getline(std::cin, prompt) || prompt.empty())
+        // Check if stdin is a terminal or pipe/file
+        if (isatty(fileno(stdin)))
         {
+            // Interactive terminal - require a prompt
             std::cerr << "Error: No prompt provided" << std::endl;
+            std::cerr << "Usage: " << argv[0] << " [options] \"prompt\"" << std::endl;
+            std::cerr << "   or: echo \"prompt\" | " << argv[0] << " [options]" << std::endl;
             return EX_USAGE;
+        }
+        else
+        {
+            // Reading from pipe or file - read all input
+            std::string line;
+            while (std::getline(std::cin, line))
+            {
+                if (!prompt.empty())
+                    prompt += "\n";
+                prompt += line;
+            }
+
+            if (prompt.empty())
+            {
+                std::cerr << "Error: No input received from stdin" << std::endl;
+                return EX_USAGE;
+            }
         }
     }
 
     // Make the API request and handle the response
     try
     {
-        std::string response = cmdgpt::get_gpt_chat_response(prompt, config);
+        if (streaming_mode)
+        {
+            // Streaming mode - output chunks as they arrive
+            std::string full_response;
 
-        // Format output based on requested format
-        std::string formatted_output = cmdgpt::format_output(response, output_format);
-        std::cout << formatted_output << std::endl;
+            cmdgpt::get_gpt_chat_response_stream(
+                prompt, config,
+                [&full_response, output_format](const std::string& chunk)
+                {
+                    // In streaming mode, we output plain text directly
+                    // Other formats need the complete response
+                    if (output_format == cmdgpt::OutputFormat::PLAIN)
+                    {
+                        std::cout << chunk << std::flush;
+                    }
+                    full_response += chunk;
+                });
+
+            // For non-plain formats, output the formatted result at the end
+            if (output_format != cmdgpt::OutputFormat::PLAIN)
+            {
+                std::string formatted_output = cmdgpt::format_output(full_response, output_format);
+                std::cout << formatted_output << std::endl;
+            }
+            else
+            {
+                std::cout << std::endl; // Add newline after streaming output
+            }
+        }
+        else
+        {
+            // Non-streaming mode - wait for complete response with retry
+            std::string response = cmdgpt::get_gpt_chat_response_with_retry(prompt, config);
+
+            // Format output based on requested format
+            std::string formatted_output = cmdgpt::format_output(response, output_format);
+            std::cout << formatted_output << std::endl;
+        }
 
         return EXIT_SUCCESS;
     }

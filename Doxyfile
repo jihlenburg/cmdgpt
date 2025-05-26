@@ -2,7 +2,7 @@
 
 # Project related configuration
 PROJECT_NAME           = "cmdgpt"
-PROJECT_NUMBER         = "v0.3"
+PROJECT_NUMBER         = "v0.4.0"
 PROJECT_BRIEF          = "Command-line interface for OpenAI GPT API"
 PROJECT_LOGO           = docs/images/logo.png 
 OUTPUT_DIRECTORY       = docs

@@ -65,3 +65,42 @@ The tool supports command-line arguments, environment variables, and configurati
 - Output formats: plain, json, markdown, code
 - Security features: input validation, certificate verification, API key redaction
 - Documentation: Doxygen with call graphs (requires Graphviz)
+- Streaming mode: --stream flag for simulated real-time output
+- Auto-retry: Exponential backoff for rate limits (429) and server errors (5xx)
+- Error recovery: Automatic conversation saving and restoration in interactive mode
+- Shell integration: Completion scripts for bash/zsh, multi-line pipe input support
+
+## Coding Style
+
+**Style**: Allman (BSD) with 4-space indentation
+
+**Naming Conventions**:
+- Classes/Structs: `PascalCase` (e.g., `Config`, `ApiException`)
+- Functions/variables: `snake_case` (e.g., `get_gpt_chat_response`, `api_key`)
+- Member variables: `snake_case_` with trailing underscore (e.g., `api_key_`, `messages_`)
+- Constants: `UPPER_SNAKE_CASE` (e.g., `MAX_PROMPT_LENGTH`, `DEFAULT_MODEL`)
+- Namespaces: lowercase (e.g., `cmdgpt`)
+
+**C++ Features**:
+- Modern C++17 features: `constexpr`, `string_view`, structured bindings
+- RAII principles with smart pointers
+- Custom exception hierarchy for error handling
+- `= default` and `= delete` for special member functions
+
+**Documentation**: Doxygen format with `@brief`, `@param`, `@return`
+
+**Formatting**: 
+- 100-character line limit
+- Pointers left-aligned (`char* ptr`)
+- Opening braces on new line (Allman style)
+- No single-line functions or if statements
+
+## Development Guidelines
+
+- Make sure the code is well documented
+  - Use clear, concise Doxygen comments for all functions and classes
+  - Explain the purpose, parameters, return values, and any side effects
+  - Include examples where appropriate
+  - Document non-obvious implementation details or design decisions
+
+- Always consider the security of the code you generate

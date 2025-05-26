@@ -3,7 +3,7 @@
  * @brief Command-line interface for OpenAI GPT API
  * @author Joern Ihlenburg
  * @date 2023-2024
- * @version 0.3
+ * @version 0.4.0
  *
  * This file contains the main API declarations for cmdgpt, a command-line
  * tool for interacting with OpenAI's GPT models. It provides features including:
@@ -72,7 +72,7 @@ namespace cmdgpt
 {
 
 /// @brief Current version of cmdgpt
-inline constexpr std::string_view VERSION = "v0.3.1";
+inline constexpr std::string_view VERSION = "v0.4.0";
 
 /// @name Default Configuration Values
 /// @{
@@ -132,6 +132,7 @@ enum class HttpStatus : int
     UNAUTHORIZED = 401,         ///< Invalid or missing API key
     FORBIDDEN = 403,            ///< Access forbidden
     NOT_FOUND = 404,            ///< Endpoint not found
+    TOO_MANY_REQUESTS = 429,    ///< Rate limit exceeded
     INTERNAL_SERVER_ERROR = 500 ///< Server error
 };
 
@@ -366,6 +367,24 @@ class Config
     }
 
     /**
+     * @brief Enable or disable streaming mode
+     * @param enable True to enable streaming, false to disable
+     */
+    void set_streaming_mode(bool enable) noexcept
+    {
+        streaming_mode_ = enable;
+    }
+
+    /**
+     * @brief Check if streaming mode is enabled
+     * @return True if streaming is enabled
+     */
+    bool streaming_mode() const noexcept
+    {
+        return streaming_mode_;
+    }
+
+    /**
      * @brief Load configuration from environment variables
      *
      * Reads from:
@@ -389,6 +408,7 @@ class Config
     std::string model_{DEFAULT_MODEL};                       ///< OpenAI model name (e.g., "gpt-4")
     std::string log_file_{"logfile.txt"};                    ///< Path to debug log file
     spdlog::level::level_enum log_level_{DEFAULT_LOG_LEVEL}; ///< Logging verbosity level
+    bool streaming_mode_{false};                             ///< Whether to stream responses
 };
 
 /**
@@ -680,6 +700,40 @@ std::string format_output(const std::string& content, OutputFormat format);
  * @param config Configuration object
  */
 void run_interactive_mode(const Config& config);
+
+/**
+ * @brief Send chat request with automatic retry on failure
+ *
+ * @param prompt The user's input prompt
+ * @param config Configuration object containing API settings
+ * @param max_retries Maximum number of retry attempts (default: 3)
+ * @return The API response text
+ *
+ * @throws ApiException on non-retryable errors or after max retries
+ * @throws NetworkException on network errors after max retries
+ *
+ * @note Automatically retries on rate limits (429) and server errors (5xx)
+ * @note Uses exponential backoff between retries
+ */
+std::string get_gpt_chat_response_with_retry(std::string_view prompt, const Config& config,
+                                             int max_retries = 3);
+
+/**
+ * @brief Send chat request with conversation history and automatic retry
+ *
+ * @param conversation The conversation history
+ * @param config Configuration object containing API settings
+ * @param max_retries Maximum number of retry attempts (default: 3)
+ * @return The API response text
+ *
+ * @throws ApiException on non-retryable errors or after max retries
+ * @throws NetworkException on network errors after max retries
+ *
+ * @note Automatically retries on rate limits (429) and server errors (5xx)
+ * @note Uses exponential backoff between retries
+ */
+std::string get_gpt_chat_response_with_retry(const Conversation& conversation, const Config& config,
+                                             int max_retries = 3);
 
 } // namespace cmdgpt
 
