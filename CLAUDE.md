@@ -101,6 +101,7 @@ The tool supports command-line arguments, environment variables, and configurati
 - Pointers left-aligned (`char* ptr`)
 - Opening braces on new line (Allman style)
 - No single-line functions or if statements
+- Configuration in `scripts/.clang-format`
 
 ## Development Guidelines
 

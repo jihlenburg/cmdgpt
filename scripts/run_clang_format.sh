@@ -91,7 +91,7 @@ if [ "$CHECK_ONLY" = true ]; then
         if [ "$VERBOSE" = true ]; then
             echo "Checking: $file"
         fi
-        if ! $CLANG_FORMAT_CMD --dry-run --Werror "$file" 2>/dev/null; then
+        if ! $CLANG_FORMAT_CMD --style=file:"$SCRIPT_DIR/.clang-format" --dry-run --Werror "$file" 2>/dev/null; then
             echo "Formatting issue in: $file"
             EXIT_CODE=1
         fi
@@ -111,7 +111,7 @@ else
         if [ "$VERBOSE" = true ]; then
             echo "Formatting: $file"
         fi
-        $CLANG_FORMAT_CMD -i "$file"
+        $CLANG_FORMAT_CMD --style=file:"$SCRIPT_DIR/.clang-format" -i "$file"
     done
     echo "Formatting complete!"
 fi

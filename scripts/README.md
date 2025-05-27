@@ -17,7 +17,7 @@ Usage:
 ```
 
 ### run_clang_format.sh
-Checks or fixes code formatting according to project standards:
+Checks or fixes code formatting according to project standards using the `.clang-format` configuration file in this directory:
 
 ```bash
 ./run_clang_format.sh --check    # Check formatting (default)
@@ -35,7 +35,38 @@ Runs static analysis on the codebase:
 ./run_cppcheck.sh
 ```
 
-### cppcheck_suppressions.txt
+### run_clang_tidy.sh
+Runs clang-tidy static analysis using the `.clang-tidy` configuration file in this directory:
+
+```bash
+./run_clang_tidy.sh              # Run analysis
+./run_clang_tidy.sh --fix        # Apply automatic fixes
+./run_clang_tidy.sh --verbose    # Show detailed output
+```
+
+Note: Requires `compile_commands.json` in the build directory. Generate it with:
+```bash
+cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
+```
+
+### Configuration Files
+
+#### .clang-format
+Defines code formatting rules for the project, including:
+- Indentation style and width
+- Brace placement (Allman style)
+- Line length limits
+- Pointer alignment
+- Include sorting rules
+
+#### .clang-tidy
+Configures static analysis checks, including:
+- Bug-prone code patterns
+- Performance improvements
+- Modernization suggestions
+- Readability enhancements
+
+#### cppcheck_suppressions.txt
 Configuration file for cppcheck containing:
 - Suppressed warnings that are false positives
 - Style warnings that don't apply to this project

@@ -314,6 +314,9 @@ cmdgpt/
 │   ├── check_all.sh              # Run all checks
 │   ├── run_clang_format.sh       # Code formatting
 │   ├── run_cppcheck.sh           # Static analysis
+│   ├── run_clang_tidy.sh         # Clang-tidy analysis
+│   ├── .clang-format             # Clang-format configuration
+│   ├── .clang-tidy               # Clang-tidy configuration
 │   └── README.md     # Scripts documentation
 ├── examples/         # Usage examples
 │   ├── simple_query.sh           # Basic usage
