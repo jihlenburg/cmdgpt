@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2025-05-27
+
+### Changed
+- Reorganized project structure for better maintainability
+  - Moved header file from `src/` to dedicated `include/` directory
+  - Relocated `.clang-format` and `.clang-tidy` files to `scripts/` directory
+  - Updated all build scripts and CMake configuration to reflect new structure
+  - Fixed documentation inconsistencies and improved code documentation
+
+### Fixed
+- Documentation version inconsistencies across files
+- Missing Doxygen documentation for some functions
+- Duplicate parameter documentation warnings in Doxygen
+
 ## [0.5.0] - 2025-05-26
 
 ### Added
