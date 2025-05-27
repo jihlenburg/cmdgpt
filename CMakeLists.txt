@@ -18,7 +18,7 @@ include(FetchContent)
 FetchContent_Declare(
   httplib
   GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
-  GIT_TAG v0.14.3
+  GIT_TAG v0.20.1
 )
 
 # nlohmann/json: Popular JSON library for parsing API responses
@@ -57,7 +57,7 @@ add_definitions(-DCPPHTTPLIB_OPENSSL_SUPPORT)  # Enable SSL/TLS in httplib
 # Core Library
 # Build the main cmdgpt functionality as a static library
 # This allows it to be used by both the main executable and tests
-add_library(cmdgpt_lib STATIC src/cmdgpt.cpp)
+add_library(cmdgpt_lib STATIC src/cmdgpt.cpp src/base64.cpp)
 
 # Set include directories for the library
 target_include_directories(cmdgpt_lib PUBLIC 

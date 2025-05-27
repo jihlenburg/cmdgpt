@@ -23,6 +23,7 @@ SOFTWARE.
 */
 
 #include "cmdgpt.h"
+#include "base64.h"
 #include "spdlog/sinks/null_sink.h"
 #include "spdlog/spdlog.h"
 #include <catch2/catch_test_macros.hpp>
@@ -551,4 +552,86 @@ TEST_CASE_METHOD(LoggerFixture, "ResponseCache Size Limits", "[cache][limits]")
 
     // Clean up
     std::filesystem::remove_all(test_dir);
+}
+
+TEST_CASE_METHOD(LoggerFixture, "Base64 Encoding and Decoding", "[base64]")
+{
+    SECTION("Encode and decode string roundtrip")
+    {
+        std::string original = "Hello, World!";
+        std::string encoded = cmdgpt::base64_encode(original);
+        REQUIRE(encoded == "SGVsbG8sIFdvcmxkIQ==");
+        
+        std::vector<uint8_t> decoded = cmdgpt::base64_decode(encoded);
+        std::string decoded_str(decoded.begin(), decoded.end());
+        REQUIRE(decoded_str == original);
+    }
+    
+    SECTION("Encode and decode binary data")
+    {
+        std::vector<uint8_t> binary_data = {0x00, 0x01, 0x02, 0xFF, 0xFE, 0xFD};
+        std::string encoded = cmdgpt::base64_encode(binary_data);
+        
+        std::vector<uint8_t> decoded = cmdgpt::base64_decode(encoded);
+        REQUIRE(decoded == binary_data);
+    }
+    
+    SECTION("Handle empty input")
+    {
+        std::string empty = "";
+        std::string encoded = cmdgpt::base64_encode(empty);
+        REQUIRE(encoded == "");
+        
+        std::vector<uint8_t> decoded = cmdgpt::base64_decode(encoded);
+        REQUIRE(decoded.empty());
+    }
+    
+    SECTION("Validate base64 strings")
+    {
+        REQUIRE(cmdgpt::is_valid_base64("SGVsbG8sIFdvcmxkIQ==") == true);
+        REQUIRE(cmdgpt::is_valid_base64("YWJjZGVmZ2hpams=") == true);
+        REQUIRE(cmdgpt::is_valid_base64("") == true);  // Empty is valid
+        REQUIRE(cmdgpt::is_valid_base64("Invalid!@#$") == false);
+        REQUIRE(cmdgpt::is_valid_base64("SGVs") == true);  // Valid without padding
+        REQUIRE(cmdgpt::is_valid_base64("SGV") == false);  // Invalid length
+    }
+    
+    SECTION("Decode invalid base64 throws")
+    {
+        REQUIRE_THROWS_AS(cmdgpt::base64_decode("Invalid!@#$"), std::invalid_argument);
+        REQUIRE_THROWS_AS(cmdgpt::base64_decode("SGV"), std::invalid_argument);
+    }
+    
+    SECTION("Handle padding correctly")
+    {
+        // Test various padding scenarios
+        REQUIRE(cmdgpt::base64_encode("a") == "YQ==");
+        REQUIRE(cmdgpt::base64_encode("ab") == "YWI=");
+        REQUIRE(cmdgpt::base64_encode("abc") == "YWJj");
+        
+        // Decode with padding
+        std::vector<uint8_t> decoded1 = cmdgpt::base64_decode("YQ==");
+        std::string str1(decoded1.begin(), decoded1.end());
+        REQUIRE(str1 == "a");
+        
+        std::vector<uint8_t> decoded2 = cmdgpt::base64_decode("YWI=");
+        std::string str2(decoded2.begin(), decoded2.end());
+        REQUIRE(str2 == "ab");
+    }
+    
+    SECTION("Large data encoding")
+    {
+        // Create a large string (1MB)
+        std::string large_data(1024 * 1024, 'A');
+        std::string encoded = cmdgpt::base64_encode(large_data);
+        
+        // Verify size is approximately 4/3 of original
+        REQUIRE(encoded.size() > large_data.size());
+        REQUIRE(encoded.size() < large_data.size() * 2);
+        
+        // Verify roundtrip
+        std::vector<uint8_t> decoded = cmdgpt::base64_decode(encoded);
+        std::string decoded_str(decoded.begin(), decoded.end());
+        REQUIRE(decoded_str == large_data);
+    }
 }

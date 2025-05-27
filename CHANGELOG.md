@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2025-05-27
+
+### Added
+- Image and PDF file support for multimodal AI interactions
+- Vision API integration for image analysis
+- Base64 encoding/decoding utilities
+- Command-line flags for file inputs (-I, --image)
+- File type detection and validation
+- Streaming support with cpp-httplib v0.20.1
+
+### Changed
+- Upgraded cpp-httplib from v0.14.3 to v0.20.1
+- Enhanced HTTP client with native streaming capabilities
+- Improved multipart form data handling
+
+### Security
+- Updated cpp-httplib includes security fixes (CVE-2025-46728)
+
 ## [0.5.1] - 2025-05-27
 
 ### Changed
