@@ -34,11 +34,13 @@ SOFTWARE.
 
 #include "file_utils.h"
 #include "cmdgpt.h"
+#include "base64.h"
 #include <fstream>
 #include <sstream>
 #include <iomanip>
 #include <chrono>
 #include <cstring>
+#include <regex>
 
 namespace cmdgpt
 {
@@ -366,6 +368,59 @@ std::string generate_timestamp_filename(const std::string& extension,
     }
     
     return ss.str();
+}
+
+std::vector<std::string> extract_and_save_images(const std::string& text,
+                                                  const std::string& prefix)
+{
+    std::vector<std::string> saved_files;
+    
+    // Regular expression to match data URIs
+    // Matches: data:image/[type];base64,[base64data]
+    // Also handles markdown image syntax: ![alt](data:image/...)
+    std::regex data_uri_regex(
+        R"(data:image/(png|jpeg|jpg|gif|webp);base64,([A-Za-z0-9+/]+=*))"
+    );
+    
+    auto begin = std::sregex_iterator(text.begin(), text.end(), data_uri_regex);
+    auto end = std::sregex_iterator();
+    
+    int count = 0;
+    for (std::sregex_iterator i = begin; i != end; ++i)
+    {
+        std::smatch match = *i;
+        std::string image_type = match[1].str();
+        std::string base64_data = match[2].str();
+        
+        try
+        {
+            // Decode base64 data
+            std::vector<uint8_t> image_data = base64_decode(base64_data);
+            
+            // Validate image
+            if (!validate_image(image_data))
+            {
+                continue; // Skip invalid images
+            }
+            
+            // Generate filename
+            std::string extension = (image_type == "jpeg" || image_type == "jpg") ? "jpg" : image_type;
+            std::string filename = generate_timestamp_filename(extension, 
+                                                             prefix + "_" + std::to_string(++count));
+            
+            // Save file
+            save_file(image_data, filename);
+            saved_files.push_back(filename);
+        }
+        catch (const std::exception& e)
+        {
+            // Log error but continue processing other images
+            // (Requires access to logger, so we'll skip for now)
+            continue;
+        }
+    }
+    
+    return saved_files;
 }
 
 } // namespace cmdgpt

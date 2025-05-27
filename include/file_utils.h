@@ -167,6 +167,17 @@ std::string generate_timestamp_filename(const std::string& extension,
  */
 std::string get_extension_from_mime(const std::string& mime_type);
 
+/**
+ * @brief Extract and save base64 images from text
+ * @param text Text that may contain base64 image data URIs
+ * @param prefix Filename prefix for saved images
+ * @return Vector of saved filenames
+ *
+ * Looks for patterns like: data:image/png;base64,... or markdown ![alt](data:image/...)
+ */
+std::vector<std::string> extract_and_save_images(const std::string& text,
+                                                  const std::string& prefix = "extracted");
+
 } // namespace cmdgpt
 
 #endif // FILE_UTILS_H

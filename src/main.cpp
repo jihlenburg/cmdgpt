@@ -34,6 +34,8 @@ SOFTWARE.
 */
 
 #include "cmdgpt.h"
+#include "base64.h"
+#include "file_utils.h"
 #include "spdlog/async.h"
 #include "spdlog/sinks/ansicolor_sink.h"
 #include "spdlog/sinks/basic_file_sink.h"
@@ -45,6 +47,11 @@ SOFTWARE.
 #include <string>
 #include <sysexits.h>
 #include <unistd.h>
+
+// Define EX_DATAERR if not available (it's not standard on all systems)
+#ifndef EX_DATAERR
+#define EX_DATAERR 65
+#endif
 
 /**
  * @brief Main entry point for the cmdgpt command-line tool
@@ -89,6 +96,14 @@ int main(int argc, const char* const argv[])
     bool interactive_mode = false;
     bool streaming_mode = false;
     cmdgpt::OutputFormat output_format = cmdgpt::OutputFormat::PLAIN;
+    
+    // Image-related variables
+    std::vector<std::string> image_paths;
+    bool generate_image_mode = false;
+    std::string image_size = "1024x1024";
+    std::string image_quality = "standard";
+    std::string image_style = "vivid";
+    bool save_images = false;
 
     static const std::map<std::string, spdlog::level::level_enum> log_levels = {
         {"TRACE", spdlog::level::trace}, {"DEBUG", spdlog::level::debug},
@@ -395,6 +410,69 @@ int main(int argc, const char* const argv[])
                 return EX_USAGE;
             }
         }
+        else if (arg == "-I" || arg == "--image")
+        {
+            if (++i >= argc)
+            {
+                std::cerr << "Error: Image path argument requires a value" << std::endl;
+                return EX_USAGE;
+            }
+            image_paths.push_back(argv[i]);
+        }
+        else if (arg == "--images")
+        {
+            if (++i >= argc)
+            {
+                std::cerr << "Error: Images argument requires comma-separated paths" << std::endl;
+                return EX_USAGE;
+            }
+            // Split comma-separated paths
+            std::string paths_str = argv[i];
+            size_t start = 0;
+            size_t end = paths_str.find(',');
+            while (end != std::string::npos)
+            {
+                image_paths.push_back(paths_str.substr(start, end - start));
+                start = end + 1;
+                end = paths_str.find(',', start);
+            }
+            image_paths.push_back(paths_str.substr(start));
+        }
+        else if (arg == "--generate-image")
+        {
+            generate_image_mode = true;
+        }
+        else if (arg == "--image-size")
+        {
+            if (++i >= argc)
+            {
+                std::cerr << "Error: Image size argument requires a value" << std::endl;
+                return EX_USAGE;
+            }
+            image_size = argv[i];
+        }
+        else if (arg == "--image-quality")
+        {
+            if (++i >= argc)
+            {
+                std::cerr << "Error: Image quality argument requires a value" << std::endl;
+                return EX_USAGE;
+            }
+            image_quality = argv[i];
+        }
+        else if (arg == "--image-style")
+        {
+            if (++i >= argc)
+            {
+                std::cerr << "Error: Image style argument requires a value" << std::endl;
+                return EX_USAGE;
+            }
+            image_style = argv[i];
+        }
+        else if (arg == "--save-images")
+        {
+            save_images = true;
+        }
         else if (arg.substr(0, 1) == "-")
         {
             std::cerr << "Error: Unknown argument: " << arg << std::endl;
@@ -526,6 +604,90 @@ int main(int argc, const char* const argv[])
         return EX_USAGE;
     }
 
+    // Handle image generation mode
+    if (generate_image_mode)
+    {
+        try
+        {
+            gLogger->info("Generating image with prompt: {}", prompt);
+            std::string base64_image = cmdgpt::generate_image(prompt, config, 
+                                                             image_size, image_quality, image_style);
+            
+            if (save_images)
+            {
+                // Decode and save the image
+                std::vector<uint8_t> image_data = cmdgpt::base64_decode(base64_image);
+                std::string filename = cmdgpt::generate_timestamp_filename("png", "dalle");
+                cmdgpt::save_file(image_data, filename);
+                std::cout << "Image saved to: " << filename << std::endl;
+            }
+            else
+            {
+                // Output base64 data
+                std::cout << base64_image << std::endl;
+            }
+            
+            return EXIT_SUCCESS;
+        }
+        catch (const std::exception& e)
+        {
+            gLogger->critical("Image generation error: {}", e.what());
+            return EXIT_FAILURE;
+        }
+    }
+    
+    // Handle vision API mode if images are provided
+    if (!image_paths.empty())
+    {
+        try
+        {
+            // Load all images
+            std::vector<cmdgpt::ImageData> images;
+            for (const auto& path : image_paths)
+            {
+                gLogger->info("Loading image: {}", path);
+                images.push_back(cmdgpt::read_image_file(path));
+            }
+            
+            // Set model to vision model if not already set
+            if (config.model().find("vision") == std::string::npos && 
+                config.model() != "gpt-4o" && 
+                config.model() != "gpt-4o-mini")
+            {
+                config.set_model("gpt-4o-mini");
+                gLogger->info("Automatically selected vision model: gpt-4o-mini");
+            }
+            
+            // Make vision API request
+            std::string response = cmdgpt::get_gpt_chat_response_with_images(prompt, images, config);
+            
+            // Format and output response
+            std::string formatted_output = cmdgpt::format_output(response, output_format);
+            std::cout << formatted_output << std::endl;
+            
+            // Extract and save any images in the response if requested
+            if (save_images)
+            {
+                auto saved_files = cmdgpt::extract_and_save_images(response, "vision_response");
+                if (!saved_files.empty())
+                {
+                    std::cout << "\nSaved " << saved_files.size() << " image(s) from response:\n";
+                    for (const auto& file : saved_files)
+                    {
+                        std::cout << "  - " << file << "\n";
+                    }
+                }
+            }
+            
+            return EXIT_SUCCESS;
+        }
+        catch (const std::exception& e)
+        {
+            gLogger->critical("Vision API error: {}", e.what());
+            return EXIT_FAILURE;
+        }
+    }
+    
     // Make the API request and handle the response
     try
     {
@@ -566,6 +728,20 @@ int main(int argc, const char* const argv[])
             // Format output based on requested format
             std::string formatted_output = cmdgpt::format_output(response, output_format);
             std::cout << formatted_output << std::endl;
+            
+            // Extract and save any images in the response if requested
+            if (save_images)
+            {
+                auto saved_files = cmdgpt::extract_and_save_images(response, "response");
+                if (!saved_files.empty())
+                {
+                    std::cout << "\nSaved " << saved_files.size() << " image(s) from response:\n";
+                    for (const auto& file : saved_files)
+                    {
+                        std::cout << "  - " << file << "\n";
+                    }
+                }
+            }
         }
 
         return EXIT_SUCCESS;
