@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2025-05-27
+
+### Fixed
+- Linux build error: Added missing `#include <cstdint>` to base64.h for uint8_t type
+- Version consistency across all files updated from 0.6.0 to 0.6.1
+
+### Documentation
+- Added CONCURRENCY_ANALYSIS.md documenting issues when running multiple cmdgpt instances
+
 ## [0.6.0] - 2025-05-27
 
 ### Added

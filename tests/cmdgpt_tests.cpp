@@ -49,7 +49,7 @@ TEST_CASE_METHOD(LoggerFixture, "Constants are defined correctly")
 {
     SECTION("Version and model defaults")
     {
-        REQUIRE(std::string(cmdgpt::VERSION) == "v0.6.0");
+        REQUIRE(std::string(cmdgpt::VERSION) == "v0.6.1");
         REQUIRE(std::string(cmdgpt::DEFAULT_MODEL) == "gpt-4");
         REQUIRE(std::string(cmdgpt::DEFAULT_SYSTEM_PROMPT) == "You are a helpful assistant!");
         REQUIRE(cmdgpt::DEFAULT_LOG_LEVEL == spdlog::level::warn);

@@ -3,7 +3,7 @@
  * @brief Command-line interface for OpenAI GPT API
  * @author Joern Ihlenburg
  * @date 2023-2024
- * @version 0.6.0
+ * @version 0.6.1
  *
  * This file contains the main API declarations for cmdgpt, a command-line
  * tool for interacting with OpenAI's GPT models. It provides features including:
@@ -79,7 +79,7 @@ namespace cmdgpt
 {
 
 /// @brief Current version of cmdgpt
-inline constexpr std::string_view VERSION = "v0.6.0";
+inline constexpr std::string_view VERSION = "v0.6.1";
 
 /// @name Default Configuration Values
 /// @{
