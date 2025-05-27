@@ -78,7 +78,7 @@ namespace cmdgpt
 {
 
 /// @brief Current version of cmdgpt
-inline constexpr std::string_view VERSION = "v0.5.0";
+inline constexpr std::string_view VERSION = "v0.5.1";
 
 /// @name Default Configuration Values
 /// @{
