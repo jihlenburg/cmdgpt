@@ -61,6 +61,8 @@ SOFTWARE.
 #include <string_view>
 #include <thread>
 #include <vector>
+#include "file_utils.h"
+
 
 /**
  * @namespace cmdgpt
@@ -298,6 +300,42 @@ class SecurityException : public CmdGptException
   public:
     explicit SecurityException(const std::string& message)
         : CmdGptException("Security Error: " + message)
+    {
+    }
+};
+
+/**
+ * @brief Exception for file operation errors
+ *
+ * Thrown when file operations fail, including:
+ * - File not found
+ * - Permission denied
+ * - Disk full
+ * - I/O errors
+ */
+class FileException : public CmdGptException
+{
+  public:
+    explicit FileException(const std::string& message)
+        : CmdGptException("File Error: " + message)
+    {
+    }
+};
+
+/**
+ * @brief Exception for image validation errors
+ *
+ * Thrown when image validation fails, including:
+ * - Unsupported format
+ * - File too large
+ * - Corrupted image data
+ * - Invalid dimensions
+ */
+class ImageValidationException : public CmdGptException
+{
+  public:
+    explicit ImageValidationException(const std::string& message)
+        : CmdGptException("Image Validation Error: " + message)
     {
     }
 };
@@ -1063,6 +1101,55 @@ std::string get_gpt_chat_response_with_retry(std::string_view prompt, const Conf
  */
 std::string get_gpt_chat_response_with_retry(const Conversation& conversation, const Config& config,
                                              int max_retries = 3);
+
+// ============================================================================
+// Multimodal Support (Vision API)
+// ============================================================================
+
+/**
+ * @brief Send a chat request with image inputs (Vision API)
+ *
+ * @param prompt The user's text prompt
+ * @param images Vector of images to include
+ * @param config Configuration object (should use vision model)
+ * @return The API response text
+ *
+ * @throws ApiException on API errors
+ * @throws NetworkException on network errors
+ * @throws ImageValidationException on invalid images
+ */
+std::string get_gpt_chat_response_with_images(std::string_view prompt,
+                                              const std::vector<ImageData>& images,
+                                              const Config& config);
+
+/**
+ * @brief Build a Vision API message with images
+ *
+ * @param text The text content
+ * @param images Vector of images to include
+ * @return JSON message string for Vision API
+ */
+std::string build_vision_message_json(const std::string& text,
+                                      const std::vector<ImageData>& images);
+
+/**
+ * @brief Generate an image using DALL-E
+ *
+ * @param prompt The image generation prompt
+ * @param config Configuration object
+ * @param size Image size (e.g., "1024x1024", "512x512")
+ * @param quality Quality level ("standard" or "hd")
+ * @param style Style ("vivid" or "natural")
+ * @return Generated image data as base64
+ *
+ * @throws ApiException on API errors
+ * @throws NetworkException on network errors
+ */
+std::string generate_image(std::string_view prompt,
+                          const Config& config,
+                          const std::string& size = "1024x1024",
+                          const std::string& quality = "standard",
+                          const std::string& style = "vivid");
 
 // ============================================================================
 // Rate Limiting and Connection Management

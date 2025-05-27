@@ -57,7 +57,7 @@ add_definitions(-DCPPHTTPLIB_OPENSSL_SUPPORT)  # Enable SSL/TLS in httplib
 # Core Library
 # Build the main cmdgpt functionality as a static library
 # This allows it to be used by both the main executable and tests
-add_library(cmdgpt_lib STATIC src/cmdgpt.cpp src/base64.cpp)
+add_library(cmdgpt_lib STATIC src/cmdgpt.cpp src/base64.cpp src/file_utils.cpp)
 
 # Set include directories for the library
 target_include_directories(cmdgpt_lib PUBLIC 

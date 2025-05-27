@@ -34,6 +34,8 @@ SOFTWARE.
 */
 
 #include "cmdgpt.h"
+#include "base64.h"
+#include "file_utils.h"
 #include "httplib.h"
 #include "nlohmann/json.hpp"
 #include "spdlog/sinks/ansicolor_sink.h"
@@ -2694,4 +2696,280 @@ cmdgpt::RateLimiter& cmdgpt::get_rate_limiter()
     // Default: 3 requests per second with burst of 5
     static RateLimiter limiter(3.0, 5);
     return limiter;
+}
+
+// ============================================================================
+// Multimodal Support Implementation
+// ============================================================================
+
+/**
+ * @brief Build a Vision API message with images
+ */
+std::string cmdgpt::build_vision_message_json(const std::string& text,
+                                              const std::vector<ImageData>& images)
+{
+    json content = json::array();
+    
+    // Add text content
+    content.push_back({
+        {"type", "text"},
+        {"text", text}
+    });
+    
+    // Add image contents
+    for (const auto& img : images)
+    {
+        std::string base64_data = base64_encode(img.data);
+        content.push_back({
+            {"type", "image_url"},
+            {"image_url", {
+                {"url", "data:" + img.mime_type + ";base64," + base64_data}
+            }}
+        });
+    }
+    
+    json message = {
+        {"role", "user"},
+        {"content", content}
+    };
+    
+    return message.dump();
+}
+
+/**
+ * @brief Send a chat request with image inputs (Vision API)
+ */
+std::string cmdgpt::get_gpt_chat_response_with_images(std::string_view prompt,
+                                                      const std::vector<ImageData>& images,
+                                                      const Config& config)
+{
+    // Validate configuration
+    config.validate();
+    validate_prompt(prompt);
+    
+    if (images.empty())
+    {
+        throw ValidationException("At least one image is required for Vision API");
+    }
+    
+    // Validate all images
+    for (const auto& img : images)
+    {
+        if (!validate_image(img.data))
+        {
+            throw ImageValidationException("Invalid image data for file: " + img.filename);
+        }
+    }
+    
+    // Build messages array with vision content
+    json messages = json::array();
+    
+    // Add system prompt if configured
+    if (!config.system_prompt().empty())
+    {
+        messages.push_back({
+            {"role", "system"},
+            {"content", config.system_prompt()}
+        });
+    }
+    
+    // Add user message with images
+    json vision_msg = json::parse(build_vision_message_json(std::string(prompt), images));
+    messages.push_back(vision_msg);
+    
+    // Build request data
+    json data = {
+        {"model", config.model()},
+        {"messages", messages},
+        {"max_tokens", 4096}  // Vision models support higher token limits
+    };
+    
+    // Make API request
+    httplib::Headers headers = {
+        {std::string(AUTHORIZATION_HEADER), "Bearer " + config.api_key()},
+        {std::string(CONTENT_TYPE_HEADER), std::string(APPLICATION_JSON)}
+    };
+    
+    // Apply rate limiting
+    get_rate_limiter().acquire();
+    
+    // Get endpoint
+    std::string server_url = config.endpoint().empty() ? std::string(SERVER_URL) : config.endpoint();
+    std::string api_path = config.endpoint().empty() ? std::string(API_URL) : "/v1/chat/completions";
+    
+    httplib::Client cli{server_url};
+    cli.set_connection_timeout(CONNECTION_TIMEOUT_SECONDS, 0);
+    cli.set_read_timeout(READ_TIMEOUT_SECONDS, 0);
+    cli.enable_server_certificate_verification(true);
+    
+    gLogger->debug("Sending vision request with {} images", images.size());
+    
+    auto res = cli.Post(api_path, headers, data.dump(), std::string(APPLICATION_JSON));
+    
+    if (!res)
+    {
+        throw NetworkException("Failed to connect to API - check network connection");
+    }
+    
+    // Handle response
+    const auto status = static_cast<HttpStatus>(res->status);
+    if (status != HttpStatus::OK)
+    {
+        std::string error_msg = "HTTP " + std::to_string(res->status);
+        if (!res->body.empty())
+        {
+            try
+            {
+                json error_json = json::parse(res->body);
+                if (error_json.contains("error") && error_json["error"].contains("message"))
+                {
+                    error_msg += ": " + error_json["error"]["message"].get<std::string>();
+                }
+            }
+            catch (...)
+            {
+                error_msg += ": " + res->body;
+            }
+        }
+        throw ApiException(status, error_msg);
+    }
+    
+    // Parse response
+    try
+    {
+        json response = json::parse(res->body);
+        if (!response.contains("choices") || response["choices"].empty())
+        {
+            throw ApiException(HttpStatus::OK, "Invalid API response: missing choices");
+        }
+        
+        std::string content = response["choices"][0]["message"]["content"];
+        
+        // Store in cache if enabled
+        if (config.cache_enabled())
+        {
+            auto& cache = get_response_cache();
+            std::string cache_key = cache.generate_key(
+                std::string(prompt) + " [" + std::to_string(images.size()) + " images]",
+                config.model(),
+                config.system_prompt()
+            );
+            cache.put(cache_key, content);
+        }
+        
+        return content;
+    }
+    catch (const json::exception& e)
+    {
+        throw ApiException(HttpStatus::OK, "Failed to parse API response: " + std::string(e.what()));
+    }
+}
+
+/**
+ * @brief Generate an image using DALL-E
+ */
+std::string cmdgpt::generate_image(std::string_view prompt,
+                                   const Config& config,
+                                   const std::string& size,
+                                   const std::string& quality,
+                                   const std::string& style)
+{
+    // Validate inputs
+    config.validate();
+    if (prompt.empty())
+    {
+        throw ValidationException("Image generation prompt cannot be empty");
+    }
+    
+    // Validate size
+    static const std::set<std::string> valid_sizes = {
+        "1024x1024", "1792x1024", "1024x1792", "512x512", "256x256"
+    };
+    if (valid_sizes.find(size) == valid_sizes.end())
+    {
+        throw ValidationException("Invalid image size. Valid sizes: 1024x1024, 1792x1024, 1024x1792, 512x512, 256x256");
+    }
+    
+    // Build request
+    json data = {
+        {"model", "dall-e-3"},
+        {"prompt", prompt},
+        {"n", 1},
+        {"size", size},
+        {"quality", quality},
+        {"style", style},
+        {"response_format", "b64_json"}  // Get base64 data directly
+    };
+    
+    // Make API request
+    httplib::Headers headers = {
+        {std::string(AUTHORIZATION_HEADER), "Bearer " + config.api_key()},
+        {std::string(CONTENT_TYPE_HEADER), std::string(APPLICATION_JSON)}
+    };
+    
+    // Apply rate limiting
+    get_rate_limiter().acquire();
+    
+    std::string server_url = config.endpoint().empty() ? std::string(SERVER_URL) : config.endpoint();
+    httplib::Client cli{server_url};
+    cli.set_connection_timeout(CONNECTION_TIMEOUT_SECONDS, 0);
+    cli.set_read_timeout(60, 0);  // Image generation can take longer
+    cli.enable_server_certificate_verification(true);
+    
+    gLogger->info("Generating image with DALL-E...");
+    
+    auto res = cli.Post("/v1/images/generations", headers, data.dump(), std::string(APPLICATION_JSON));
+    
+    if (!res)
+    {
+        throw NetworkException("Failed to connect to DALL-E API");
+    }
+    
+    // Handle response
+    const auto status = static_cast<HttpStatus>(res->status);
+    if (status != HttpStatus::OK)
+    {
+        std::string error_msg = "HTTP " + std::to_string(res->status);
+        if (!res->body.empty())
+        {
+            try
+            {
+                json error_json = json::parse(res->body);
+                if (error_json.contains("error") && error_json["error"].contains("message"))
+                {
+                    error_msg += ": " + error_json["error"]["message"].get<std::string>();
+                }
+            }
+            catch (...)
+            {
+                error_msg += ": " + res->body;
+            }
+        }
+        throw ApiException(status, error_msg);
+    }
+    
+    // Parse response
+    try
+    {
+        json response = json::parse(res->body);
+        if (!response.contains("data") || response["data"].empty())
+        {
+            throw ApiException(HttpStatus::OK, "Invalid DALL-E response: missing data");
+        }
+        
+        std::string base64_image = response["data"][0]["b64_json"];
+        
+        // Log revised prompt if available
+        if (response["data"][0].contains("revised_prompt"))
+        {
+            gLogger->info("DALL-E revised prompt: {}", 
+                         response["data"][0]["revised_prompt"].get<std::string>());
+        }
+        
+        return base64_image;
+    }
+    catch (const json::exception& e)
+    {
+        throw ApiException(HttpStatus::OK, "Failed to parse DALL-E response: " + std::string(e.what()));
+    }
 }
