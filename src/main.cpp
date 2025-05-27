@@ -47,7 +47,18 @@ SOFTWARE.
 #include <unistd.h>
 
 /**
- * @brief Parses command-line arguments and environment variables
+ * @brief Main entry point for the cmdgpt command-line tool
+ * 
+ * Parses command-line arguments and environment variables, processes user input,
+ * and interacts with the OpenAI API to generate responses.
+ * 
+ * @param argc Number of command-line arguments
+ * @param argv Array of command-line argument strings
+ * @return Exit code:
+ *         - 0 (EX_OK): Success
+ *         - 64 (EX_USAGE): Command line usage error
+ *         - 75 (EX_TEMPFAIL): Temporary failure (e.g., network error)
+ *         - 78 (EX_CONFIG): Configuration error
  */
 int main(int argc, const char* const argv[])
 {

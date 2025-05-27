@@ -168,7 +168,7 @@ See [examples/README.md](examples/README.md) for detailed documentation.
 | `-f` | `--format` | Output format: plain, json, markdown, code (default: plain) |
 | `-k` | `--api_key` | Set OpenAI API key |
 | `-s` | `--sys_prompt` | Set system prompt for context |
-| `-m` | `--gpt_model` | Choose GPT model (default: gpt-4-turbo-preview) |
+| `-m` | `--gpt_model` | Choose GPT model (default: gpt-4) |
 | `-l` | `--log_file` | Specify log file path |
 | `-L` | `--log_level` | Set log level (TRACE, DEBUG, INFO, WARN, ERROR, CRITICAL) |
 | | `--no-cache` | Bypass cache for this request |

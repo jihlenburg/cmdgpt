@@ -38,7 +38,7 @@ cd build
 make docs
 
 # Using Doxygen directly
-doxygen Doxyfile
+doxygen docs/Doxyfile
 ```
 
 ## Documentation Features

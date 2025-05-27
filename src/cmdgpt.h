@@ -3,7 +3,7 @@
  * @brief Command-line interface for OpenAI GPT API
  * @author Joern Ihlenburg
  * @date 2023-2024
- * @version 0.5.0-dev
+ * @version 0.5.0
  *
  * This file contains the main API declarations for cmdgpt, a command-line
  * tool for interacting with OpenAI's GPT models. It provides features including:
@@ -13,8 +13,7 @@
  * - Comprehensive error handling
  * - Security features including input validation
  *
- * @copyright Copyright (c) 2023 Joern Ihlenburg
- * @author Joern Ihlenburg
+ * @copyright Copyright (c) 2023-2024 Joern Ihlenburg
  */
 
 /*
