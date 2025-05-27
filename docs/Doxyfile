@@ -83,7 +83,7 @@ WARN_LINE_FORMAT       = "at line $line of file $file"
 WARN_LOGFILE           = 
 
 # Configuration options related to the input files
-INPUT                  = src/cmdgpt.h src/cmdgpt.cpp src/main.cpp docs/mainpage.dox README.md CHANGELOG.md
+INPUT                  = include/cmdgpt.h src/cmdgpt.cpp src/main.cpp docs/mainpage.dox README.md CHANGELOG.md
 INPUT_ENCODING         = UTF-8
 INPUT_FILE_ENCODING    = 
 FILE_PATTERNS          = *.c \

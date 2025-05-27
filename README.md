@@ -296,8 +296,9 @@ The tool follows standard Unix exit codes:
 
 ```
 cmdgpt/
+├── include/          # Header files
+│   └── cmdgpt.h      # Header file with declarations
 ├── src/              # Source code
-│   ├── cmdgpt.h      # Header file with declarations
 │   ├── cmdgpt.cpp    # Core implementation
 │   └── main.cpp      # CLI entry point
 ├── tests/            # Test suite

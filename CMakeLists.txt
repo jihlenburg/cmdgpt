@@ -61,7 +61,7 @@ add_library(cmdgpt_lib STATIC src/cmdgpt.cpp)
 
 # Set include directories for the library
 target_include_directories(cmdgpt_lib PUBLIC 
-    ${CMAKE_CURRENT_SOURCE_DIR}/src    # For cmdgpt.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include    # For cmdgpt.h
     ${httplib_SOURCE_DIR}                  # For httplib headers
     ${OPENSSL_INCLUDE_DIR})                # For OpenSSL headers
 

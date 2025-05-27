@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#include "../src/cmdgpt.h"
+#include "cmdgpt.h"
 #include "spdlog/sinks/null_sink.h"
 #include "spdlog/spdlog.h"
 #include <catch2/catch_test_macros.hpp>

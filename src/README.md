@@ -4,7 +4,6 @@ This directory contains the core source code for cmdgpt.
 
 ## Files
 
-- **cmdgpt.h** - Header file with class declarations, function prototypes, and constants
 - **cmdgpt.cpp** - Core implementation including:
   - OpenAI API client functionality
   - Response caching system
