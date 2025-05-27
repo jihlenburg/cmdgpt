@@ -38,11 +38,11 @@ SOFTWARE.
 #ifndef FILE_UTILS_H
 #define FILE_UTILS_H
 
+#include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
-#include <filesystem>
-#include <optional>
 
 namespace cmdgpt
 {
@@ -75,12 +75,12 @@ enum class FileType
  */
 struct ImageData
 {
-    std::vector<uint8_t> data;     ///< Raw image data
-    std::string mime_type;         ///< MIME type (e.g., "image/png")
-    std::string filename;          ///< Original filename
-    size_t size;                   ///< File size in bytes
-    std::optional<size_t> width;   ///< Image width (if detected)
-    std::optional<size_t> height;  ///< Image height (if detected)
+    std::vector<uint8_t> data;    ///< Raw image data
+    std::string mime_type;        ///< MIME type (e.g., "image/png")
+    std::string filename;         ///< Original filename
+    size_t size;                  ///< File size in bytes
+    std::optional<size_t> width;  ///< Image width (if detected)
+    std::optional<size_t> height; ///< Image height (if detected)
 };
 
 /**
@@ -88,11 +88,11 @@ struct ImageData
  */
 struct FileData
 {
-    std::vector<uint8_t> data;     ///< Raw file data
-    std::string mime_type;         ///< MIME type
-    std::string filename;          ///< Original filename
-    size_t size;                   ///< File size in bytes
-    FileType type;                 ///< Detected file type
+    std::vector<uint8_t> data; ///< Raw file data
+    std::string mime_type;     ///< MIME type
+    std::string filename;      ///< Original filename
+    size_t size;               ///< File size in bytes
+    FileType type;             ///< Detected file type
 };
 
 /**
@@ -157,8 +157,8 @@ void save_file(const std::vector<uint8_t>& data, const std::filesystem::path& pa
  * @param prefix Optional prefix for the filename
  * @return Generated filename
  */
-std::string generate_timestamp_filename(const std::string& extension, 
-                                       const std::string& prefix = "cmdgpt");
+std::string generate_timestamp_filename(const std::string& extension,
+                                        const std::string& prefix = "cmdgpt");
 
 /**
  * @brief Get file extension from MIME type
@@ -176,7 +176,7 @@ std::string get_extension_from_mime(const std::string& mime_type);
  * Looks for patterns like: data:image/png;base64,... or markdown ![alt](data:image/...)
  */
 std::vector<std::string> extract_and_save_images(const std::string& text,
-                                                  const std::string& prefix = "extracted");
+                                                 const std::string& prefix = "extracted");
 
 } // namespace cmdgpt
 

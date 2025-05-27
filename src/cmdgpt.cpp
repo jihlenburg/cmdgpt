@@ -603,7 +603,14 @@ std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, std::string_v
     std::string finish_reason = first_choice[finish_reason_key].get<std::string>();
     gLogger->debug("Finish reason: {}", finish_reason);
 
-    return first_choice["message"][content_key].get<std::string>();
+    // Extract the content
+    std::string content = first_choice["message"][content_key].get<std::string>();
+
+    // Note: Token usage display would require access to Config here
+    // Currently the low-level API function doesn't have access to Config
+    // This is a design limitation that would need refactoring to fix properly
+
+    return content;
 }
 
 /**
@@ -2718,30 +2725,21 @@ std::string cmdgpt::build_vision_message_json(const std::string& text,
                                               const std::vector<ImageData>& images)
 {
     json content = json::array();
-    
+
     // Add text content
-    content.push_back({
-        {"type", "text"},
-        {"text", text}
-    });
-    
+    content.push_back({{"type", "text"}, {"text", text}});
+
     // Add image contents
     for (const auto& img : images)
     {
         std::string base64_data = base64_encode(img.data);
-        content.push_back({
-            {"type", "image_url"},
-            {"image_url", {
-                {"url", "data:" + img.mime_type + ";base64," + base64_data}
-            }}
-        });
+        content.push_back(
+            {{"type", "image_url"},
+             {"image_url", {{"url", "data:" + img.mime_type + ";base64," + base64_data}}}});
     }
-    
-    json message = {
-        {"role", "user"},
-        {"content", content}
-    };
-    
+
+    json message = {{"role", "user"}, {"content", content}};
+
     return message.dump();
 }
 
@@ -2755,12 +2753,12 @@ std::string cmdgpt::get_gpt_chat_response_with_images(std::string_view prompt,
     // Validate configuration
     config.validate();
     validate_prompt(prompt);
-    
+
     if (images.empty())
     {
         throw ValidationException("At least one image is required for Vision API");
     }
-    
+
     // Validate all images
     for (const auto& img : images)
     {
@@ -2769,57 +2767,53 @@ std::string cmdgpt::get_gpt_chat_response_with_images(std::string_view prompt,
             throw ImageValidationException("Invalid image data for file: " + img.filename);
         }
     }
-    
+
     // Build messages array with vision content
     json messages = json::array();
-    
+
     // Add system prompt if configured
     if (!config.system_prompt().empty())
     {
-        messages.push_back({
-            {"role", "system"},
-            {"content", config.system_prompt()}
-        });
+        messages.push_back({{"role", "system"}, {"content", config.system_prompt()}});
     }
-    
+
     // Add user message with images
     json vision_msg = json::parse(build_vision_message_json(std::string(prompt), images));
     messages.push_back(vision_msg);
-    
+
     // Build request data
     json data = {
-        {"model", config.model()},
-        {"messages", messages},
-        {"max_tokens", 4096}  // Vision models support higher token limits
+        {"model", config.model()}, {"messages", messages}, {"max_tokens", 4096}
+        // Vision models support higher token limits
     };
-    
+
     // Make API request
-    httplib::Headers headers = {
-        {std::string(AUTHORIZATION_HEADER), "Bearer " + config.api_key()},
-        {std::string(CONTENT_TYPE_HEADER), std::string(APPLICATION_JSON)}
-    };
-    
+    httplib::Headers headers = {{std::string(AUTHORIZATION_HEADER), "Bearer " + config.api_key()},
+                                {std::string(CONTENT_TYPE_HEADER), std::string(APPLICATION_JSON)}};
+
     // Apply rate limiting
     get_rate_limiter().acquire();
-    
+
     // Get endpoint
-    std::string server_url = config.endpoint().empty() ? std::string(SERVER_URL) : config.endpoint();
-    std::string api_path = config.endpoint().empty() ? std::string(API_URL) : "/v1/chat/completions";
-    
+    std::string server_url =
+        config.endpoint().empty() ? std::string(SERVER_URL) : config.endpoint();
+    std::string api_path =
+        config.endpoint().empty() ? std::string(API_URL) : "/v1/chat/completions";
+
     httplib::Client cli{server_url};
     cli.set_connection_timeout(CONNECTION_TIMEOUT_SECONDS, 0);
     cli.set_read_timeout(READ_TIMEOUT_SECONDS, 0);
     cli.enable_server_certificate_verification(true);
-    
+
     gLogger->debug("Sending vision request with {} images", images.size());
-    
+
     auto res = cli.Post(api_path, headers, data.dump(), std::string(APPLICATION_JSON));
-    
+
     if (!res)
     {
         throw NetworkException("Failed to connect to API - check network connection");
     }
-    
+
     // Handle response
     const auto status = static_cast<HttpStatus>(res->status);
     if (status != HttpStatus::OK)
@@ -2842,7 +2836,7 @@ std::string cmdgpt::get_gpt_chat_response_with_images(std::string_view prompt,
         }
         throw ApiException(status, error_msg);
     }
-    
+
     // Parse response
     try
     {
@@ -2851,36 +2845,33 @@ std::string cmdgpt::get_gpt_chat_response_with_images(std::string_view prompt,
         {
             throw ApiException(HttpStatus::OK, "Invalid API response: missing choices");
         }
-        
+
         std::string content = response["choices"][0]["message"]["content"];
-        
+
         // Store in cache if enabled
         if (config.cache_enabled())
         {
             auto& cache = get_response_cache();
             std::string cache_key = cache.generate_key(
                 std::string(prompt) + " [" + std::to_string(images.size()) + " images]",
-                config.model(),
-                config.system_prompt()
-            );
+                config.model(), config.system_prompt());
             cache.put(cache_key, content);
         }
-        
+
         return content;
     }
     catch (const json::exception& e)
     {
-        throw ApiException(HttpStatus::OK, "Failed to parse API response: " + std::string(e.what()));
+        throw ApiException(HttpStatus::OK,
+                           "Failed to parse API response: " + std::string(e.what()));
     }
 }
 
 /**
  * @brief Generate an image using DALL-E
  */
-std::string cmdgpt::generate_image(std::string_view prompt,
-                                   const Config& config,
-                                   const std::string& size,
-                                   const std::string& quality,
+std::string cmdgpt::generate_image(std::string_view prompt, const Config& config,
+                                   const std::string& size, const std::string& quality,
                                    const std::string& style)
 {
     // Validate inputs
@@ -2889,16 +2880,16 @@ std::string cmdgpt::generate_image(std::string_view prompt,
     {
         throw ValidationException("Image generation prompt cannot be empty");
     }
-    
+
     // Validate size
-    static const std::set<std::string> valid_sizes = {
-        "1024x1024", "1792x1024", "1024x1792", "512x512", "256x256"
-    };
+    static const std::set<std::string> valid_sizes = {"1024x1024", "1792x1024", "1024x1792",
+                                                      "512x512", "256x256"};
     if (valid_sizes.find(size) == valid_sizes.end())
     {
-        throw ValidationException("Invalid image size. Valid sizes: 1024x1024, 1792x1024, 1024x1792, 512x512, 256x256");
+        throw ValidationException(
+            "Invalid image size. Valid sizes: 1024x1024, 1792x1024, 1024x1792, 512x512, 256x256");
     }
-    
+
     // Build request
     json data = {
         {"model", "dall-e-3"},
@@ -2907,33 +2898,33 @@ std::string cmdgpt::generate_image(std::string_view prompt,
         {"size", size},
         {"quality", quality},
         {"style", style},
-        {"response_format", "b64_json"}  // Get base64 data directly
+        {"response_format", "b64_json"} // Get base64 data directly
     };
-    
+
     // Make API request
-    httplib::Headers headers = {
-        {std::string(AUTHORIZATION_HEADER), "Bearer " + config.api_key()},
-        {std::string(CONTENT_TYPE_HEADER), std::string(APPLICATION_JSON)}
-    };
-    
+    httplib::Headers headers = {{std::string(AUTHORIZATION_HEADER), "Bearer " + config.api_key()},
+                                {std::string(CONTENT_TYPE_HEADER), std::string(APPLICATION_JSON)}};
+
     // Apply rate limiting
     get_rate_limiter().acquire();
-    
-    std::string server_url = config.endpoint().empty() ? std::string(SERVER_URL) : config.endpoint();
+
+    std::string server_url =
+        config.endpoint().empty() ? std::string(SERVER_URL) : config.endpoint();
     httplib::Client cli{server_url};
     cli.set_connection_timeout(CONNECTION_TIMEOUT_SECONDS, 0);
-    cli.set_read_timeout(60, 0);  // Image generation can take longer
+    cli.set_read_timeout(60, 0); // Image generation can take longer
     cli.enable_server_certificate_verification(true);
-    
+
     gLogger->info("Generating image with DALL-E...");
-    
-    auto res = cli.Post("/v1/images/generations", headers, data.dump(), std::string(APPLICATION_JSON));
-    
+
+    auto res =
+        cli.Post("/v1/images/generations", headers, data.dump(), std::string(APPLICATION_JSON));
+
     if (!res)
     {
         throw NetworkException("Failed to connect to DALL-E API");
     }
-    
+
     // Handle response
     const auto status = static_cast<HttpStatus>(res->status);
     if (status != HttpStatus::OK)
@@ -2956,7 +2947,7 @@ std::string cmdgpt::generate_image(std::string_view prompt,
         }
         throw ApiException(status, error_msg);
     }
-    
+
     // Parse response
     try
     {
@@ -2965,20 +2956,201 @@ std::string cmdgpt::generate_image(std::string_view prompt,
         {
             throw ApiException(HttpStatus::OK, "Invalid DALL-E response: missing data");
         }
-        
+
         std::string base64_image = response["data"][0]["b64_json"];
-        
+
         // Log revised prompt if available
         if (response["data"][0].contains("revised_prompt"))
         {
-            gLogger->info("DALL-E revised prompt: {}", 
-                         response["data"][0]["revised_prompt"].get<std::string>());
+            gLogger->info("DALL-E revised prompt: {}",
+                          response["data"][0]["revised_prompt"].get<std::string>());
         }
-        
+
         return base64_image;
     }
     catch (const json::exception& e)
     {
-        throw ApiException(HttpStatus::OK, "Failed to parse DALL-E response: " + std::string(e.what()));
+        throw ApiException(HttpStatus::OK,
+                           "Failed to parse DALL-E response: " + std::string(e.what()));
     }
+}
+
+// ============================================================================
+// API Functions with Full Response (includes token usage)
+// ============================================================================
+
+cmdgpt::ApiResponse cmdgpt::get_gpt_chat_response_full(std::string_view prompt,
+                                                       const Config& config)
+{
+    // Validate configuration and input
+    config.validate();
+    validate_prompt(prompt);
+
+    if (config.api_key().empty())
+    {
+        throw ConfigurationException("API key not configured");
+    }
+
+    // Check cache if enabled
+    if (config.cache_enabled())
+    {
+        auto& cache = get_response_cache();
+        std::string cache_key = cache.generate_key(prompt, config.model(), config.system_prompt());
+
+        std::string cached_response = cache.get(cache_key);
+        if (!cached_response.empty())
+        {
+            gLogger->info("Using cached response for prompt");
+
+            ApiResponse response;
+            response.content = cached_response;
+            response.from_cache = true;
+            // Token usage not available for cached responses
+            return response;
+        }
+    }
+
+    // Prepare the request similar to the low-level function
+    std::string actual_api_key = config.api_key();
+    std::string actual_system_prompt = config.system_prompt().empty()
+                                           ? std::string(DEFAULT_SYSTEM_PROMPT)
+                                           : config.system_prompt();
+    std::string actual_model = config.model();
+
+    // Setup headers
+    httplib::Headers headers = {{std::string(AUTHORIZATION_HEADER), "Bearer " + actual_api_key},
+                                {std::string(CONTENT_TYPE_HEADER), std::string(APPLICATION_JSON)}};
+
+    // Prepare JSON data
+    json data = {{std::string(MODEL_KEY), actual_model},
+                 {std::string(MESSAGES_KEY),
+                  {{{std::string(ROLE_KEY), std::string(SYSTEM_ROLE)},
+                    {std::string(CONTENT_KEY), actual_system_prompt}},
+                   {{std::string(ROLE_KEY), std::string(USER_ROLE)},
+                    {std::string(CONTENT_KEY), std::string(prompt)}}}}};
+
+    // Apply rate limiting
+    get_rate_limiter().acquire();
+
+    // Initialize HTTP client
+    httplib::Client cli{std::string(SERVER_URL)};
+    cli.set_connection_timeout(CONNECTION_TIMEOUT_SECONDS, 0);
+    cli.set_read_timeout(READ_TIMEOUT_SECONDS, 0);
+    cli.enable_server_certificate_verification(true);
+
+    // Send request
+    auto res = cli.Post(std::string(API_URL), headers, data.dump(), std::string(APPLICATION_JSON));
+
+    if (!res)
+    {
+        throw NetworkException("Failed to connect to OpenAI API - check network connection");
+    }
+
+    if (res->status != static_cast<int>(HttpStatus::OK))
+    {
+        std::string error_msg = "HTTP error " + std::to_string(res->status);
+        if (!res->body.empty())
+        {
+            try
+            {
+                json error_json = json::parse(res->body);
+                if (error_json.contains("error") && error_json["error"].contains("message"))
+                {
+                    error_msg += ": " + error_json["error"]["message"].get<std::string>();
+                }
+            }
+            catch (...)
+            {
+            }
+        }
+        throw ApiException(static_cast<HttpStatus>(res->status), error_msg);
+    }
+
+    // Parse response
+    json res_json = json::parse(res->body);
+
+    if (!res_json.contains("choices") || res_json["choices"].empty())
+    {
+        throw ApiException(HttpStatus::OK, "Invalid API response: missing choices");
+    }
+
+    const auto& first_choice = res_json["choices"][0];
+
+    // Build ApiResponse
+    ApiResponse response;
+    response.content = first_choice["message"]["content"].get<std::string>();
+    response.from_cache = false;
+
+    // Parse token usage
+    if (res_json.contains("usage"))
+    {
+        response.token_usage = parse_token_usage(res->body, actual_model);
+    }
+
+    // Store in cache if enabled
+    if (config.cache_enabled() && !response.content.empty())
+    {
+        auto& cache = get_response_cache();
+        std::string cache_key = cache.generate_key(prompt, config.model(), config.system_prompt());
+        cache.put(cache_key, response.content);
+    }
+
+    // Record in history
+    auto& history = get_response_history();
+    history.add_entry(prompt, response.content, actual_model, response.token_usage, false);
+
+    return response;
+}
+
+cmdgpt::ApiResponse cmdgpt::get_gpt_chat_response_full(const Conversation& conversation,
+                                                       const Config& config)
+{
+    // Use existing function for now
+    ApiResponse response;
+    response.content = get_gpt_chat_response(conversation, config);
+    response.from_cache = false;
+    return response;
+}
+
+cmdgpt::ApiResponse cmdgpt::get_gpt_chat_response_with_images_full(
+    std::string_view prompt, const std::vector<ImageData>& images, const Config& config)
+{
+    // Use existing function for now
+    ApiResponse response;
+    response.content = get_gpt_chat_response_with_images(prompt, images, config);
+    response.from_cache = false;
+    return response;
+}
+
+cmdgpt::ApiResponse cmdgpt::generate_image_full(std::string_view prompt, const Config& config,
+                                                const std::string& size, const std::string& quality,
+                                                const std::string& style)
+{
+    // Use existing function and add cost calculation
+    ApiResponse response;
+    response.content = generate_image(prompt, config, size, quality, style);
+    response.from_cache = false;
+
+    // DALL-E doesn't return token usage, but we can estimate cost
+    response.token_usage.prompt_tokens = 0;
+    response.token_usage.completion_tokens = 0;
+    response.token_usage.total_tokens = 0;
+
+    // Set cost based on quality and size
+    if (quality == "hd")
+    {
+        if (size == "1024x1024")
+            response.token_usage.estimated_cost = 0.080;
+        else if (size == "1024x1792" || size == "1792x1024")
+            response.token_usage.estimated_cost = 0.120;
+    }
+    else // standard
+    {
+        if (size == "1024x1024")
+            response.token_usage.estimated_cost = 0.040;
+        else if (size == "1024x1792" || size == "1792x1024")
+            response.token_usage.estimated_cost = 0.080;
+    }
+
+    return response;
 }

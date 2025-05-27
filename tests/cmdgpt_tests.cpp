@@ -22,8 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#include "cmdgpt.h"
 #include "base64.h"
+#include "cmdgpt.h"
 #include "file_utils.h"
 #include "spdlog/sinks/null_sink.h"
 #include "spdlog/spdlog.h"
@@ -49,7 +49,7 @@ TEST_CASE_METHOD(LoggerFixture, "Constants are defined correctly")
 {
     SECTION("Version and model defaults")
     {
-        REQUIRE(std::string(cmdgpt::VERSION) == "v0.5.1");
+        REQUIRE(std::string(cmdgpt::VERSION) == "v0.6.0");
         REQUIRE(std::string(cmdgpt::DEFAULT_MODEL) == "gpt-4");
         REQUIRE(std::string(cmdgpt::DEFAULT_SYSTEM_PROMPT) == "You are a helpful assistant!");
         REQUIRE(cmdgpt::DEFAULT_LOG_LEVEL == spdlog::level::warn);
@@ -563,74 +563,74 @@ TEST_CASE_METHOD(LoggerFixture, "Base64 Encoding and Decoding", "[base64]")
         std::string original = "Hello, World!";
         std::string encoded = cmdgpt::base64_encode(original);
         REQUIRE(encoded == "SGVsbG8sIFdvcmxkIQ==");
-        
+
         std::vector<uint8_t> decoded = cmdgpt::base64_decode(encoded);
         std::string decoded_str(decoded.begin(), decoded.end());
         REQUIRE(decoded_str == original);
     }
-    
+
     SECTION("Encode and decode binary data")
     {
         std::vector<uint8_t> binary_data = {0x00, 0x01, 0x02, 0xFF, 0xFE, 0xFD};
         std::string encoded = cmdgpt::base64_encode(binary_data);
-        
+
         std::vector<uint8_t> decoded = cmdgpt::base64_decode(encoded);
         REQUIRE(decoded == binary_data);
     }
-    
+
     SECTION("Handle empty input")
     {
         std::string empty = "";
         std::string encoded = cmdgpt::base64_encode(empty);
         REQUIRE(encoded == "");
-        
+
         std::vector<uint8_t> decoded = cmdgpt::base64_decode(encoded);
         REQUIRE(decoded.empty());
     }
-    
+
     SECTION("Validate base64 strings")
     {
         REQUIRE(cmdgpt::is_valid_base64("SGVsbG8sIFdvcmxkIQ==") == true);
         REQUIRE(cmdgpt::is_valid_base64("YWJjZGVmZ2hpams=") == true);
-        REQUIRE(cmdgpt::is_valid_base64("") == true);  // Empty is valid
+        REQUIRE(cmdgpt::is_valid_base64("") == true); // Empty is valid
         REQUIRE(cmdgpt::is_valid_base64("Invalid!@#$") == false);
-        REQUIRE(cmdgpt::is_valid_base64("SGVs") == true);  // Valid without padding
-        REQUIRE(cmdgpt::is_valid_base64("SGV") == false);  // Invalid length
+        REQUIRE(cmdgpt::is_valid_base64("SGVs") == true); // Valid without padding
+        REQUIRE(cmdgpt::is_valid_base64("SGV") == false); // Invalid length
     }
-    
+
     SECTION("Decode invalid base64 throws")
     {
         REQUIRE_THROWS_AS(cmdgpt::base64_decode("Invalid!@#$"), std::invalid_argument);
         REQUIRE_THROWS_AS(cmdgpt::base64_decode("SGV"), std::invalid_argument);
     }
-    
+
     SECTION("Handle padding correctly")
     {
         // Test various padding scenarios
         REQUIRE(cmdgpt::base64_encode("a") == "YQ==");
         REQUIRE(cmdgpt::base64_encode("ab") == "YWI=");
         REQUIRE(cmdgpt::base64_encode("abc") == "YWJj");
-        
+
         // Decode with padding
         std::vector<uint8_t> decoded1 = cmdgpt::base64_decode("YQ==");
         std::string str1(decoded1.begin(), decoded1.end());
         REQUIRE(str1 == "a");
-        
+
         std::vector<uint8_t> decoded2 = cmdgpt::base64_decode("YWI=");
         std::string str2(decoded2.begin(), decoded2.end());
         REQUIRE(str2 == "ab");
     }
-    
+
     SECTION("Large data encoding")
     {
         // Create a large string (1MB)
         std::string large_data(1024 * 1024, 'A');
         std::string encoded = cmdgpt::base64_encode(large_data);
-        
+
         // Verify size is approximately 4/3 of original
         REQUIRE(encoded.size() > large_data.size());
         REQUIRE(encoded.size() < large_data.size() * 2);
-        
+
         // Verify roundtrip
         std::vector<uint8_t> decoded = cmdgpt::base64_decode(encoded);
         std::string decoded_str(decoded.begin(), decoded.end());
@@ -645,43 +645,43 @@ TEST_CASE_METHOD(LoggerFixture, "File Type Detection", "[file_utils]")
         std::vector<uint8_t> png_header = {0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
         REQUIRE(cmdgpt::detect_file_type(png_header) == cmdgpt::FileType::PNG);
     }
-    
+
     SECTION("Detect JPEG files")
     {
         std::vector<uint8_t> jpeg_header = {0xFF, 0xD8, 0xFF, 0xE0};
         REQUIRE(cmdgpt::detect_file_type(jpeg_header) == cmdgpt::FileType::JPEG);
     }
-    
+
     SECTION("Detect GIF files")
     {
         std::vector<uint8_t> gif87_header = {0x47, 0x49, 0x46, 0x38, 0x37, 0x61};
         REQUIRE(cmdgpt::detect_file_type(gif87_header) == cmdgpt::FileType::GIF);
-        
+
         std::vector<uint8_t> gif89_header = {0x47, 0x49, 0x46, 0x38, 0x39, 0x61};
         REQUIRE(cmdgpt::detect_file_type(gif89_header) == cmdgpt::FileType::GIF);
     }
-    
+
     SECTION("Detect WebP files")
     {
         std::vector<uint8_t> webp_header = {
-            0x52, 0x49, 0x46, 0x46,  // RIFF
-            0x00, 0x00, 0x00, 0x00,  // File size (ignored)
-            0x57, 0x45, 0x42, 0x50   // WEBP
+            0x52, 0x49, 0x46, 0x46, // RIFF
+            0x00, 0x00, 0x00, 0x00, // File size (ignored)
+            0x57, 0x45, 0x42, 0x50  // WEBP
         };
         REQUIRE(cmdgpt::detect_file_type(webp_header) == cmdgpt::FileType::WEBP);
     }
-    
+
     SECTION("Detect PDF files")
     {
         std::vector<uint8_t> pdf_header = {0x25, 0x50, 0x44, 0x46, 0x2D};
         REQUIRE(cmdgpt::detect_file_type(pdf_header) == cmdgpt::FileType::PDF);
     }
-    
+
     SECTION("Unknown file type")
     {
         std::vector<uint8_t> unknown = {0x00, 0x01, 0x02, 0x03};
         REQUIRE(cmdgpt::detect_file_type(unknown) == cmdgpt::FileType::UNKNOWN);
-        
+
         std::vector<uint8_t> empty;
         REQUIRE(cmdgpt::detect_file_type(empty) == cmdgpt::FileType::UNKNOWN);
     }
@@ -713,20 +713,20 @@ TEST_CASE_METHOD(LoggerFixture, "Image Validation", "[file_utils]")
     {
         std::vector<uint8_t> png_data = {0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00};
         REQUIRE(cmdgpt::validate_image(png_data) == true);
-        
+
         std::vector<uint8_t> jpeg_data = {0xFF, 0xD8, 0xFF, 0xE0, 0x00};
         REQUIRE(cmdgpt::validate_image(jpeg_data) == true);
     }
-    
+
     SECTION("Invalid image data")
     {
         std::vector<uint8_t> invalid = {0x00, 0x01, 0x02};
         REQUIRE(cmdgpt::validate_image(invalid) == false);
-        
+
         std::vector<uint8_t> empty;
         REQUIRE(cmdgpt::validate_image(empty) == false);
     }
-    
+
     SECTION("Size validation")
     {
         std::vector<uint8_t> small_png = {0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
@@ -740,26 +740,26 @@ TEST_CASE_METHOD(LoggerFixture, "PDF Validation", "[file_utils]")
     SECTION("Valid PDF")
     {
         std::vector<uint8_t> pdf_data = {
-            0x25, 0x50, 0x44, 0x46, 0x2D,  // %PDF-
-            0x31, 0x2E, 0x34, 0x0A,        // 1.4\n
-            0x00, 0x00, 0x00, 0x00,        // Content
-            0x25, 0x25, 0x45, 0x4F, 0x46   // %%EOF
+            0x25, 0x50, 0x44, 0x46, 0x2D, // %PDF-
+            0x31, 0x2E, 0x34, 0x0A,       // 1.4\n
+            0x00, 0x00, 0x00, 0x00,       // Content
+            0x25, 0x25, 0x45, 0x4F, 0x46  // %%EOF
         };
         REQUIRE(cmdgpt::validate_pdf(pdf_data) == true);
     }
-    
+
     SECTION("Invalid PDF")
     {
         std::vector<uint8_t> not_pdf = {0x00, 0x01, 0x02, 0x03, 0x04};
         REQUIRE(cmdgpt::validate_pdf(not_pdf) == false);
-        
+
         // Missing %%EOF
         std::vector<uint8_t> no_eof = {
-            0x25, 0x50, 0x44, 0x46, 0x2D,  // %PDF-
-            0x31, 0x2E, 0x34, 0x0A         // 1.4\n
+            0x25, 0x50, 0x44, 0x46, 0x2D, // %PDF-
+            0x31, 0x2E, 0x34, 0x0A        // 1.4\n
         };
         REQUIRE(cmdgpt::validate_pdf(no_eof) == false);
-        
+
         std::vector<uint8_t> empty;
         REQUIRE(cmdgpt::validate_pdf(empty) == false);
     }
@@ -769,16 +769,16 @@ TEST_CASE_METHOD(LoggerFixture, "Timestamp Filename Generation", "[file_utils]")
 {
     std::string filename1 = cmdgpt::generate_timestamp_filename("png");
     std::string filename2 = cmdgpt::generate_timestamp_filename("jpg", "test");
-    
+
     SECTION("Correct format")
     {
         REQUIRE(filename1.find("cmdgpt_") == 0);
         REQUIRE(filename1.find(".png") != std::string::npos);
-        
+
         REQUIRE(filename2.find("test_") == 0);
         REQUIRE(filename2.find(".jpg") != std::string::npos);
     }
-    
+
     SECTION("Unique filenames")
     {
         // Sleep briefly to ensure different timestamps
@@ -792,21 +792,21 @@ TEST_CASE_METHOD(LoggerFixture, "File Operations", "[file_utils][integration]")
 {
     std::string test_dir = "/tmp/cmdgpt_file_test_" + std::to_string(std::time(nullptr));
     std::filesystem::create_directory(test_dir);
-    
+
     SECTION("Save and validate file")
     {
         std::vector<uint8_t> test_data = {0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
         std::filesystem::path test_file = test_dir + "/test.png";
-        
+
         REQUIRE_NOTHROW(cmdgpt::save_file(test_data, test_file));
         REQUIRE(std::filesystem::exists(test_file));
-        
+
         // Verify permissions (owner read/write only)
         auto perms = std::filesystem::status(test_file).permissions();
         REQUIRE((perms & std::filesystem::perms::owner_read) != std::filesystem::perms::none);
         REQUIRE((perms & std::filesystem::perms::owner_write) != std::filesystem::perms::none);
     }
-    
+
     // Clean up
     std::filesystem::remove_all(test_dir);
 }

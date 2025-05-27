@@ -43,6 +43,7 @@ SOFTWARE.
 #ifndef CMDGPT_H
 #define CMDGPT_H
 
+#include "file_utils.h"
 #include "spdlog/spdlog.h"
 #include <atomic>
 #include <chrono>
@@ -61,8 +62,6 @@ SOFTWARE.
 #include <string_view>
 #include <thread>
 #include <vector>
-#include "file_utils.h"
-
 
 /**
  * @namespace cmdgpt
@@ -80,7 +79,7 @@ namespace cmdgpt
 {
 
 /// @brief Current version of cmdgpt
-inline constexpr std::string_view VERSION = "v0.5.1";
+inline constexpr std::string_view VERSION = "v0.6.0";
 
 /// @name Default Configuration Values
 /// @{
@@ -316,8 +315,7 @@ class SecurityException : public CmdGptException
 class FileException : public CmdGptException
 {
   public:
-    explicit FileException(const std::string& message)
-        : CmdGptException("File Error: " + message)
+    explicit FileException(const std::string& message) : CmdGptException("File Error: " + message)
     {
     }
 };
@@ -1145,11 +1143,66 @@ std::string build_vision_message_json(const std::string& text,
  * @throws ApiException on API errors
  * @throws NetworkException on network errors
  */
-std::string generate_image(std::string_view prompt,
-                          const Config& config,
-                          const std::string& size = "1024x1024",
-                          const std::string& quality = "standard",
-                          const std::string& style = "vivid");
+std::string generate_image(std::string_view prompt, const Config& config,
+                           const std::string& size = "1024x1024",
+                           const std::string& quality = "standard",
+                           const std::string& style = "vivid");
+
+// ============================================================================
+// API Functions with Full Response (includes token usage)
+// ============================================================================
+
+/**
+ * @brief Get GPT chat response with full metadata including token usage
+ *
+ * Same as get_gpt_chat_response but returns the full ApiResponse structure
+ * containing token usage information and cache status.
+ *
+ * @param prompt The user's input prompt
+ * @param config Configuration object with API settings
+ * @return ApiResponse with content, token usage, and cache status
+ *
+ * @throws ApiException on API errors
+ * @throws NetworkException on network errors
+ * @throws ValidationException on invalid input
+ */
+ApiResponse get_gpt_chat_response_full(std::string_view prompt, const Config& config);
+
+/**
+ * @brief Get GPT chat response with conversation context and full metadata
+ *
+ * @param conversation The conversation history
+ * @param config Configuration object
+ * @return ApiResponse with content, token usage, and cache status
+ */
+ApiResponse get_gpt_chat_response_full(const Conversation& conversation, const Config& config);
+
+/**
+ * @brief Get GPT chat response with images and full metadata
+ *
+ * @param prompt The user's input prompt
+ * @param images Vector of images to analyze
+ * @param config Configuration object
+ * @return ApiResponse with content, token usage, and cache status
+ */
+ApiResponse get_gpt_chat_response_with_images_full(std::string_view prompt,
+                                                   const std::vector<ImageData>& images,
+                                                   const Config& config);
+
+/**
+ * @brief Generate an image using DALL-E with full metadata
+ *
+ * @param prompt The image generation prompt
+ * @param config Configuration object
+ * @param size Image size
+ * @param quality Quality level
+ * @param style Style
+ * @return ApiResponse with generated image data and metadata
+ */
+ApiResponse generate_image_full(std::string_view prompt, const Config& config,
+                                const std::string& size = "1024x1024",
+                                const std::string& quality = "standard",
+                                const std::string& style = "vivid");
 
 // ============================================================================
 // Rate Limiting and Connection Management

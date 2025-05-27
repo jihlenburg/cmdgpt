@@ -33,8 +33,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#include "cmdgpt.h"
 #include "base64.h"
+#include "cmdgpt.h"
 #include "file_utils.h"
 #include "spdlog/async.h"
 #include "spdlog/sinks/ansicolor_sink.h"
@@ -42,6 +42,7 @@ SOFTWARE.
 #include "spdlog/spdlog.h"
 #include <cstdlib>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -96,7 +97,7 @@ int main(int argc, const char* const argv[])
     bool interactive_mode = false;
     bool streaming_mode = false;
     cmdgpt::OutputFormat output_format = cmdgpt::OutputFormat::PLAIN;
-    
+
     // Image-related variables
     std::vector<std::string> image_paths;
     bool generate_image_mode = false;
@@ -610,9 +611,22 @@ int main(int argc, const char* const argv[])
         try
         {
             gLogger->info("Generating image with prompt: {}", prompt);
-            std::string base64_image = cmdgpt::generate_image(prompt, config, 
-                                                             image_size, image_quality, image_style);
-            
+            std::string base64_image;
+            cmdgpt::TokenUsage token_usage;
+
+            if (config.show_tokens())
+            {
+                auto api_response = cmdgpt::generate_image_full(prompt, config, image_size,
+                                                                image_quality, image_style);
+                base64_image = api_response.content;
+                token_usage = api_response.token_usage;
+            }
+            else
+            {
+                base64_image =
+                    cmdgpt::generate_image(prompt, config, image_size, image_quality, image_style);
+            }
+
             if (save_images)
             {
                 // Decode and save the image
@@ -626,7 +640,14 @@ int main(int argc, const char* const argv[])
                 // Output base64 data
                 std::cout << base64_image << std::endl;
             }
-            
+
+            // Display token usage (cost) if requested
+            if (config.show_tokens() && token_usage.estimated_cost > 0)
+            {
+                std::cout << "\nImage generation cost: $" << std::fixed << std::setprecision(3)
+                          << token_usage.estimated_cost << std::endl;
+            }
+
             return EXIT_SUCCESS;
         }
         catch (const std::exception& e)
@@ -635,7 +656,7 @@ int main(int argc, const char* const argv[])
             return EXIT_FAILURE;
         }
     }
-    
+
     // Handle vision API mode if images are provided
     if (!image_paths.empty())
     {
@@ -648,23 +669,41 @@ int main(int argc, const char* const argv[])
                 gLogger->info("Loading image: {}", path);
                 images.push_back(cmdgpt::read_image_file(path));
             }
-            
+
             // Set model to vision model if not already set
-            if (config.model().find("vision") == std::string::npos && 
-                config.model() != "gpt-4o" && 
+            if (config.model().find("vision") == std::string::npos && config.model() != "gpt-4o" &&
                 config.model() != "gpt-4o-mini")
             {
                 config.set_model("gpt-4o-mini");
                 gLogger->info("Automatically selected vision model: gpt-4o-mini");
             }
-            
+
             // Make vision API request
-            std::string response = cmdgpt::get_gpt_chat_response_with_images(prompt, images, config);
-            
+            std::string response;
+            cmdgpt::TokenUsage token_usage;
+
+            if (config.show_tokens())
+            {
+                auto api_response =
+                    cmdgpt::get_gpt_chat_response_with_images_full(prompt, images, config);
+                response = api_response.content;
+                token_usage = api_response.token_usage;
+            }
+            else
+            {
+                response = cmdgpt::get_gpt_chat_response_with_images(prompt, images, config);
+            }
+
             // Format and output response
             std::string formatted_output = cmdgpt::format_output(response, output_format);
             std::cout << formatted_output << std::endl;
-            
+
+            // Display token usage if requested
+            if (config.show_tokens() && token_usage.total_tokens > 0)
+            {
+                std::cout << "\n" << cmdgpt::format_token_usage(token_usage) << std::endl;
+            }
+
             // Extract and save any images in the response if requested
             if (save_images)
             {
@@ -678,7 +717,7 @@ int main(int argc, const char* const argv[])
                     }
                 }
             }
-            
+
             return EXIT_SUCCESS;
         }
         catch (const std::exception& e)
@@ -687,7 +726,7 @@ int main(int argc, const char* const argv[])
             return EXIT_FAILURE;
         }
     }
-    
+
     // Make the API request and handle the response
     try
     {
@@ -723,12 +762,30 @@ int main(int argc, const char* const argv[])
         else
         {
             // Non-streaming mode - wait for complete response with retry
-            std::string response = cmdgpt::get_gpt_chat_response_with_retry(prompt, config);
+            std::string response;
+            cmdgpt::TokenUsage token_usage;
+
+            if (config.show_tokens())
+            {
+                auto api_response = cmdgpt::get_gpt_chat_response_full(prompt, config);
+                response = api_response.content;
+                token_usage = api_response.token_usage;
+            }
+            else
+            {
+                response = cmdgpt::get_gpt_chat_response_with_retry(prompt, config);
+            }
 
             // Format output based on requested format
             std::string formatted_output = cmdgpt::format_output(response, output_format);
             std::cout << formatted_output << std::endl;
-            
+
+            // Display token usage if requested
+            if (config.show_tokens() && token_usage.total_tokens > 0)
+            {
+                std::cout << "\n" << cmdgpt::format_token_usage(token_usage) << std::endl;
+            }
+
             // Extract and save any images in the response if requested
             if (save_images)
             {
