@@ -48,10 +48,10 @@ SOFTWARE.
 
 /**
  * @brief Main entry point for the cmdgpt command-line tool
- * 
+ *
  * Parses command-line arguments and environment variables, processes user input,
  * and interacts with the OpenAI API to generate responses.
- * 
+ *
  * @param argc Number of command-line arguments
  * @param argv Array of command-line argument strings
  * @return Exit code:
