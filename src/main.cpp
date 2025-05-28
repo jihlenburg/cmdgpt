@@ -48,6 +48,10 @@ SOFTWARE.
 #include <string>
 #include <sysexits.h>
 #include <unistd.h>
+#ifdef _WIN32
+#include <windows.h>
+#include <process.h>
+#endif
 
 // Define EX_DATAERR if not available (it's not standard on all systems)
 #ifndef EX_DATAERR
@@ -500,8 +504,24 @@ int main(int argc, const char* const argv[])
         spdlog::init_thread_pool(8192, 1);
 
         auto console_sink = std::make_shared<spdlog::sinks::ansicolor_stdout_sink_mt>();
+        
+        // Make log file process-specific to avoid concurrent write issues
+        std::string log_file = config.log_file();
+        if (log_file == "logfile.txt")  // Only modify default log file
+        {
+            // Add process ID to default log file name
+            auto pid = std::to_string(
+#ifdef _WIN32
+                GetCurrentProcessId()
+#else
+                getpid()
+#endif
+            );
+            log_file = "logfile_" + pid + ".txt";
+        }
+        
         auto file_sink =
-            std::make_shared<spdlog::sinks::basic_file_sink_mt>(config.log_file(), true);
+            std::make_shared<spdlog::sinks::basic_file_sink_mt>(log_file, true);
 
         // Create async logger to prevent I/O blocking on TRACE level
         gLogger = std::make_shared<spdlog::async_logger>(

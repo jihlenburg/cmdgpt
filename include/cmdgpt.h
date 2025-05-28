@@ -1229,6 +1229,11 @@ class RateLimiter
      * @param burst_size Maximum burst capacity (default: same as requests_per_second)
      */
     explicit RateLimiter(double requests_per_second, size_t burst_size = 0);
+    
+    /**
+     * @brief Virtual destructor for inheritance
+     */
+    virtual ~RateLimiter() = default;
 
     /**
      * @brief Acquire permission to make a request
@@ -1236,13 +1241,13 @@ class RateLimiter
      * Blocks if rate limit is exceeded until a token becomes available.
      * Thread-safe and fair (FIFO).
      */
-    void acquire();
+    virtual void acquire();
 
     /**
      * @brief Try to acquire permission without blocking
      * @return true if acquired, false if would exceed rate limit
      */
-    bool try_acquire();
+    virtual bool try_acquire();
 
     /**
      * @brief Get current available tokens

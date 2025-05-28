@@ -36,6 +36,8 @@ SOFTWARE.
 #include "cmdgpt.h"
 #include "base64.h"
 #include "file_utils.h"
+#include "file_lock.h"
+#include "file_rate_limiter.h"
 #include "httplib.h"
 #include "nlohmann/json.hpp"
 #include "spdlog/sinks/ansicolor_sink.h"
@@ -1808,6 +1810,9 @@ std::string cmdgpt::ResponseCache::get(const std::string& key) const
 
     try
     {
+        // Use shared lock for reading
+        FileLock lock(path, LockType::SHARED);
+        
         std::ifstream file(path);
         if (!file.is_open())
         {
@@ -1873,18 +1878,12 @@ void cmdgpt::ResponseCache::put(const std::string& key, std::string_view respons
         cache_data["timestamp"] = std::time(nullptr);
         cache_data["version"] = VERSION;
 
-        // Write atomically to prevent partial writes
-        auto temp_path = path.string() + ".tmp";
-        std::ofstream file(temp_path);
-        if (file.is_open())
-        {
-            file << cache_data.dump(2);
-            file.close();
+        // Use atomic file writer to prevent corruption during concurrent writes
+        AtomicFileWriter writer(path);
+        writer.write(cache_data.dump(2));
+        writer.commit();
 
-            // Atomic rename
-            std::filesystem::rename(temp_path, path);
-            gLogger->debug("Cached response with key: {}", key);
-        }
+        gLogger->debug("Cached response with key: {}", key);
     }
     catch (const std::exception& e)
     {
@@ -2250,14 +2249,10 @@ void cmdgpt::ResponseHistory::save() const
                      {"from_cache", entry.from_cache}});
     }
 
-    std::ofstream file(history_file_);
-    if (!file)
-    {
-        throw std::runtime_error("Failed to open history file for writing: " +
-                                 history_file_.string());
-    }
-
-    file << j.dump(2);
+    // Use atomic file writer for safe concurrent writes
+    AtomicFileWriter writer(history_file_);
+    writer.write(j.dump(2));
+    writer.commit();
 }
 
 /**
@@ -2268,6 +2263,9 @@ void cmdgpt::ResponseHistory::load()
     if (!std::filesystem::exists(history_file_))
         return;
 
+    // Use shared lock for reading
+    FileLock lock(history_file_, LockType::SHARED);
+    
     std::ifstream file(history_file_);
     if (!file)
     {
@@ -2709,8 +2707,62 @@ size_t cmdgpt::RateLimiter::available_tokens() const
  */
 cmdgpt::RateLimiter& cmdgpt::get_rate_limiter()
 {
-    // Default: 3 requests per second with burst of 5
-    static RateLimiter limiter(3.0, 5);
+    // Use a wrapper that delegates to file-based rate limiter for cross-process sync
+    static class FileBasedRateLimiterWrapper : public RateLimiter
+    {
+      private:
+        std::unique_ptr<FileRateLimiter> file_limiter_;
+
+      public:
+        FileBasedRateLimiterWrapper() : RateLimiter(3.0, 5)
+        {
+            // Get rate limiter state file path
+            const char* home = std::getenv("HOME");
+            if (!home)
+            {
+                // Fallback to in-memory rate limiting if HOME not set
+                return;
+            }
+            
+            auto state_file = std::filesystem::path(home) / ".cmdgpt" / "rate_limiter.state";
+            try
+            {
+                file_limiter_ = std::make_unique<FileRateLimiter>(state_file, 3.0, 5);
+            }
+            catch (const std::exception& e)
+            {
+                gLogger->warn("Failed to initialize file-based rate limiter: {}", e.what());
+                // Fall back to in-memory rate limiting
+            }
+        }
+        
+        void acquire() override
+        {
+            if (file_limiter_)
+            {
+                // Use file-based rate limiter for cross-process synchronization
+                file_limiter_->acquire();
+            }
+            else
+            {
+                // Fall back to in-memory rate limiting
+                RateLimiter::acquire();
+            }
+        }
+        
+        bool try_acquire() override
+        {
+            if (file_limiter_)
+            {
+                return file_limiter_->try_acquire();
+            }
+            else
+            {
+                return RateLimiter::try_acquire();
+            }
+        }
+    } limiter;
+    
     return limiter;
 }
 

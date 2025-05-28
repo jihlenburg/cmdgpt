@@ -5,14 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.1] - 2025-05-27
+## [0.6.1] - 2025-05-28
 
 ### Fixed
 - Linux build error: Added missing `#include <cstdint>` to base64.h for uint8_t type
 - Version consistency across all files updated from 0.6.0 to 0.6.1
+- **Major concurrency issues when running multiple cmdgpt instances in parallel:**
+  - Rate limiter now uses file-based synchronization for cross-process coordination
+  - Cache operations now use file locking to prevent corruption
+  - History file operations now use atomic writes to prevent data loss
+  - Log files are now process-specific by default (logfile_<PID>.txt)
+
+### Added
+- Cross-platform file locking utilities (FileLock, ScopedLockFile, AtomicFileWriter)
+- File-based rate limiter for process synchronization (FileRateLimiter)
+- Comprehensive concurrency test suite
+
+### Changed
+- ResponseCache now uses shared locks for reads and atomic writes
+- ResponseHistory now uses file locking and atomic file operations
+- Default rate limiter switched to file-based implementation
+- Log files now include process ID to avoid write conflicts
 
 ### Documentation
-- Added CONCURRENCY_ANALYSIS.md documenting issues when running multiple cmdgpt instances
+- Added CONCURRENCY_ANALYSIS.md documenting parallel execution issues
+- Added CONCURRENCY_FIXES.md documenting the implemented solutions
 
 ## [0.6.0] - 2025-05-27
 
