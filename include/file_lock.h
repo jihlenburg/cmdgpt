@@ -41,6 +41,7 @@ SOFTWARE.
 #include <fstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
