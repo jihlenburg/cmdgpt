@@ -9,9 +9,9 @@
 #ifndef FILE_RATE_LIMITER_H
 #define FILE_RATE_LIMITER_H
 
-#include <filesystem>
-#include <chrono>
 #include <atomic>
+#include <chrono>
+#include <filesystem>
 #include <memory>
 
 namespace cmdgpt
@@ -45,10 +45,9 @@ class FileRateLimiter
      * @param burst_size Maximum burst capacity (bucket size)
      * @param timeout_ms Timeout for acquiring lock (milliseconds)
      */
-    explicit FileRateLimiter(const std::filesystem::path& state_file,
-                            double rate = 3.0,
-                            size_t burst_size = 5,
-                            std::chrono::milliseconds timeout_ms = std::chrono::milliseconds(5000));
+    explicit FileRateLimiter(
+        const std::filesystem::path& state_file, double rate = 3.0, size_t burst_size = 5,
+        std::chrono::milliseconds timeout_ms = std::chrono::milliseconds(5000));
 
     /**
      * @brief Destructor
@@ -81,7 +80,7 @@ class FileRateLimiter
      * @param max_wait Maximum time to wait (0 = infinite)
      * @return True if tokens were acquired, false if timeout
      */
-    bool acquire(size_t tokens = 1, 
+    bool acquire(size_t tokens = 1,
                  std::chrono::milliseconds max_wait = std::chrono::milliseconds(0));
 
     /**
@@ -115,22 +114,22 @@ class FileRateLimiter
      * @param max_age Maximum age before considering file stale
      */
     static void cleanup_stale_files(const std::filesystem::path& directory,
-                                   std::chrono::hours max_age = std::chrono::hours(1));
+                                    std::chrono::hours max_age = std::chrono::hours(1));
 
   private:
     struct TokenBucketState
     {
-        double tokens;                    ///< Current token count
-        int64_t last_update_ms;          ///< Last update timestamp (ms since epoch)
-        double rate;                     ///< Tokens per second
-        size_t burst_size;               ///< Maximum bucket capacity
-        uint32_t version;                ///< Format version for future compatibility
+        double tokens;          ///< Current token count
+        int64_t last_update_ms; ///< Last update timestamp (ms since epoch)
+        double rate;            ///< Tokens per second
+        size_t burst_size;      ///< Maximum bucket capacity
+        uint32_t version;       ///< Format version for future compatibility
     };
 
-    std::filesystem::path state_file_;   ///< Path to shared state file
-    double rate_;                        ///< Tokens per second
-    size_t burst_size_;                  ///< Maximum burst capacity
-    std::chrono::milliseconds timeout_;  ///< Lock acquisition timeout
+    std::filesystem::path state_file_;  ///< Path to shared state file
+    double rate_;                       ///< Tokens per second
+    size_t burst_size_;                 ///< Maximum burst capacity
+    std::chrono::milliseconds timeout_; ///< Lock acquisition timeout
 
     /**
      * @brief Load current state from file
@@ -152,8 +151,7 @@ class FileRateLimiter
      * @param state Current state to update
      * @param now Current timestamp
      */
-    void update_tokens(TokenBucketState& state, 
-                      std::chrono::system_clock::time_point now) const;
+    void update_tokens(TokenBucketState& state, std::chrono::system_clock::time_point now) const;
 };
 
 } // namespace cmdgpt

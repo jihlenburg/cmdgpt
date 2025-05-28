@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2025-05-28
+
+### Changed
+- Streamlined codebase by consolidating duplicate code
+- Improved code maintainability with internal helper functions
+- Applied consistent formatting throughout the codebase
+
+### Technical Improvements
+- Eliminated ~300 lines of duplicate code
+- Consolidated HTTP client setup into a single helper function
+- Unified error handling patterns across all API calls
+- Streamlined JSON parsing and response extraction
+- Fixed all code formatting issues identified by clang-format
+
 ## [0.6.1] - 2025-05-28
 
 ### Fixed

@@ -35,9 +35,9 @@ SOFTWARE.
 
 #include "cmdgpt.h"
 #include "base64.h"
-#include "file_utils.h"
 #include "file_lock.h"
 #include "file_rate_limiter.h"
+#include "file_utils.h"
 #include "httplib.h"
 #include "nlohmann/json.hpp"
 #include "spdlog/sinks/ansicolor_sink.h"
@@ -388,6 +388,19 @@ void cmdgpt::Config::validate() const
 }
 
 // ============================================================================
+// Model Pricing Data
+// ============================================================================
+
+/**
+ * @brief Model pricing per 1K tokens (as of 2024)
+ */
+static const std::map<std::string, std::pair<double, double>> MODEL_PRICING = {
+    {"gpt-4", {0.03, 0.06}}, // input, output per 1K tokens
+    {"gpt-4-turbo-preview", {0.01, 0.03}},
+    {"gpt-3.5-turbo", {0.0005, 0.0015}},
+    {"gpt-3.5-turbo-16k", {0.003, 0.004}}};
+
+// ============================================================================
 // API Communication Functions
 // ============================================================================
 
@@ -426,6 +439,164 @@ static std::pair<std::string, std::string> extract_endpoint_info(const cmdgpt::C
 
     return {server_url, api_path};
 }
+
+namespace
+{
+/**
+ * @brief Create and configure an HTTP client with standard settings
+ * @internal
+ */
+httplib::Client create_configured_client(const std::string& server_url, int timeout_seconds = 30)
+{
+    httplib::Client cli{server_url};
+    cli.set_connection_timeout(cmdgpt::CONNECTION_TIMEOUT_SECONDS, 0);
+    cli.set_read_timeout(timeout_seconds, 0);
+    cli.enable_server_certificate_verification(true);
+    return cli;
+}
+
+/**
+ * @brief Handle common HTTP error responses
+ * @internal
+ */
+void handle_http_error(cmdgpt::HttpStatus status, const std::string& body = "")
+{
+    std::string error_msg;
+
+    switch (status)
+    {
+    case cmdgpt::HttpStatus::BAD_REQUEST:
+        error_msg = "Bad request - check your input parameters";
+        break;
+    case cmdgpt::HttpStatus::UNAUTHORIZED:
+        error_msg = "Invalid API key - check your authentication";
+        break;
+    case cmdgpt::HttpStatus::FORBIDDEN:
+        error_msg = "Access forbidden - check your API permissions";
+        break;
+    case cmdgpt::HttpStatus::NOT_FOUND:
+        error_msg = "Resource not found - check your endpoint URL";
+        break;
+    case cmdgpt::HttpStatus::TOO_MANY_REQUESTS:
+        error_msg = "Rate limit exceeded - please wait before retrying";
+        break;
+    case cmdgpt::HttpStatus::INTERNAL_SERVER_ERROR:
+    case cmdgpt::HttpStatus::BAD_GATEWAY:
+    case cmdgpt::HttpStatus::SERVICE_UNAVAILABLE:
+    case cmdgpt::HttpStatus::GATEWAY_TIMEOUT:
+        error_msg = "Server error - please try again later";
+        break;
+    default:
+        error_msg = "Unexpected HTTP status: " + std::to_string(static_cast<int>(status));
+        break;
+    }
+
+    // Try to extract error details from response body
+    if (!body.empty())
+    {
+        try
+        {
+            json error_json = json::parse(body);
+            if (error_json.contains("error") && error_json["error"].contains("message"))
+            {
+                error_msg += ": " + error_json["error"]["message"].get<std::string>();
+            }
+        }
+        catch (...)
+        { /* Ignore parse errors */
+        }
+    }
+
+    throw cmdgpt::ApiException(status, error_msg);
+}
+
+/**
+ * @brief Parse and validate JSON response
+ * @internal
+ */
+json parse_json_response(const std::string& body, const std::string& context = "")
+{
+    if (body.empty())
+    {
+        throw cmdgpt::ApiException(cmdgpt::HttpStatus::EMPTY_RESPONSE,
+                                   "Received empty response from API");
+    }
+
+    if (body.length() > cmdgpt::MAX_RESPONSE_LENGTH)
+    {
+        throw cmdgpt::ValidationException("Response exceeds maximum allowed size");
+    }
+
+    try
+    {
+        return json::parse(body);
+    }
+    catch (const json::parse_error& e)
+    {
+        std::string msg = "Invalid JSON response";
+        if (!context.empty())
+            msg += " in " + context;
+        msg += ": " + std::string(e.what());
+        throw cmdgpt::ApiException(cmdgpt::HttpStatus::EMPTY_RESPONSE, msg);
+    }
+}
+
+/**
+ * @brief Extract message content from chat completion response
+ * @internal
+ */
+std::string extract_message_content(const json& response)
+{
+    if (!response.contains("choices") || !response["choices"].is_array() ||
+        response["choices"].empty())
+    {
+        throw cmdgpt::ApiException(cmdgpt::HttpStatus::EMPTY_RESPONSE,
+                                   "API response missing choices array");
+    }
+
+    const auto& first_choice = response["choices"][0];
+    if (!first_choice.contains("message") || !first_choice["message"].contains("content"))
+    {
+        throw cmdgpt::ApiException(cmdgpt::HttpStatus::EMPTY_RESPONSE,
+                                   "API response missing message content");
+    }
+
+    return first_choice["message"]["content"].get<std::string>();
+}
+
+/**
+ * @brief Extract token usage from response
+ * @internal
+ */
+cmdgpt::TokenUsage extract_token_usage(const json& response, const std::string& model = "")
+{
+    cmdgpt::TokenUsage usage{};
+
+    if (response.contains("usage") && response["usage"].is_object())
+    {
+        const auto& usage_obj = response["usage"];
+
+        if (usage_obj.contains("prompt_tokens"))
+            usage.prompt_tokens = usage_obj["prompt_tokens"].get<int>();
+        if (usage_obj.contains("completion_tokens"))
+            usage.completion_tokens = usage_obj["completion_tokens"].get<int>();
+        if (usage_obj.contains("total_tokens"))
+            usage.total_tokens = usage_obj["total_tokens"].get<int>();
+
+        // Calculate cost if model pricing is known
+        if (!model.empty() && MODEL_PRICING.count(model) > 0)
+        {
+            const auto& pricing = MODEL_PRICING.at(model);
+            usage.estimated_cost =
+                (usage.prompt_tokens * pricing.first + usage.completion_tokens * pricing.second) /
+                1000.0;
+        }
+    }
+
+    return usage;
+}
+
+} // anonymous namespace
 
 /**
  * @brief Sends a chat completion request to the OpenAI API
@@ -489,26 +660,11 @@ std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, std::string_v
     // Apply rate limiting before making request
     get_rate_limiter().acquire();
 
-    // Initialize the HTTP client with security settings
-    httplib::Client cli{std::string(SERVER_URL)};
-
-    // Set connection and read timeouts using security constants
-    // Connection timeout (10s): Reasonable time for establishing HTTPS connection
-    // Read timeout (30s): Allows for OpenAI's processing time on complex prompts
-    // These prevent indefinite hangs while accommodating normal API response times
-    cli.set_connection_timeout(CONNECTION_TIMEOUT_SECONDS, 0);
-    cli.set_read_timeout(READ_TIMEOUT_SECONDS, 0);
-
-    // Enable certificate verification for security
-    // This ensures we're actually talking to OpenAI's servers and not a MITM attacker
-    // Certificate validation includes:
-    // - Checking certificate chain to trusted root CA
-    // - Verifying certificate hasn't expired
-    // - Ensuring hostname matches certificate's CN/SAN
-    cli.enable_server_certificate_verification(true);
+    // Initialize the HTTP client
+    auto cli = create_configured_client(std::string(SERVER_URL));
 
     // Log the request safely (without exposing API key)
-    gLogger->debug("Debug: Sending POST request to {} with API key: {}", API_URL,
+    gLogger->debug("Sending POST request to {} with API key: {}", API_URL,
                    redact_api_key(actual_api_key));
 
     // Send the POST request
@@ -520,99 +676,20 @@ std::string cmdgpt::get_gpt_chat_response(std::string_view prompt, std::string_v
         throw NetworkException("Failed to connect to OpenAI API - check network connection");
     }
 
-    gLogger->debug("Debug: Received HTTP response with status {} and body: {}", res->status,
-                   res->body);
+    gLogger->debug("Received HTTP response with status {}", res->status);
 
-    // Handle HTTP response status codes
-    // OpenAI API returns standard HTTP status codes:
-    // - 2xx: Success
-    // - 4xx: Client errors (bad request, auth issues, rate limits)
-    // - 5xx: Server errors (OpenAI service issues)
+    // Handle non-OK status codes
     const auto status = static_cast<HttpStatus>(res->status);
-    switch (status)
+    if (status != HttpStatus::OK)
     {
-    case HttpStatus::OK:
-        // Success - continue processing
-        break;
-    case HttpStatus::BAD_REQUEST:
-        // Usually means invalid model, malformed JSON, or invalid parameters
-        throw ApiException(status, "Bad request - check your input parameters");
-    case HttpStatus::UNAUTHORIZED:
-        // Invalid or missing API key
-        throw ApiException(status, "Unauthorized - check your API key");
-    case HttpStatus::FORBIDDEN:
-        // Account doesn't have access to the requested model or feature
-        throw ApiException(status, "Forbidden - insufficient permissions");
-    case HttpStatus::NOT_FOUND:
-        // Wrong API endpoint or model name
-        throw ApiException(status, "API endpoint not found");
-    case HttpStatus::INTERNAL_SERVER_ERROR:
-        // OpenAI service issue - usually temporary
-        throw ApiException(status, "OpenAI server error - try again later");
-    default:
-        throw ApiException(status, "Unexpected HTTP status code: " + std::to_string(res->status));
+        handle_http_error(status, res->body);
     }
 
-    // Validate response size to prevent DoS attacks
-    // Large responses could consume excessive memory or indicate malicious activity
-    if (res->body.length() > MAX_RESPONSE_LENGTH)
-    {
-        throw ValidationException("Response exceeds maximum allowed size");
-    }
+    // Parse and validate response
+    json res_json = parse_json_response(res->body, "chat completion");
 
-    // Parse and validate response body
-    // Empty responses indicate server issues or network problems
-    if (res->body.empty())
-    {
-        throw ApiException(HttpStatus::EMPTY_RESPONSE, "Received empty response from API");
-    }
-
-    json res_json;
-    try
-    {
-        res_json = json::parse(res->body);
-    }
-    catch (const json::parse_error& e)
-    {
-        throw ApiException(HttpStatus::EMPTY_RESPONSE,
-                           "Invalid JSON response: " + std::string(e.what()));
-    }
-
-    // Validate response structure
-    const std::string choices_key{CHOICES_KEY};
-    const std::string content_key{CONTENT_KEY};
-    const std::string finish_reason_key{FINISH_REASON_KEY};
-
-    if (!res_json.contains(choices_key) || res_json[choices_key].empty())
-    {
-        throw ApiException(HttpStatus::EMPTY_RESPONSE,
-                           "API response missing or empty 'choices' array");
-    }
-
-    const auto& first_choice = res_json[choices_key][0];
-    if (!first_choice.contains(finish_reason_key))
-    {
-        throw ApiException(HttpStatus::EMPTY_RESPONSE,
-                           "API response missing 'finish_reason' field");
-    }
-
-    if (!first_choice.contains("message") || !first_choice["message"].contains(content_key))
-    {
-        throw ApiException(HttpStatus::EMPTY_RESPONSE, "API response missing message content");
-    }
-
-    // Extract and return the response
-    std::string finish_reason = first_choice[finish_reason_key].get<std::string>();
-    gLogger->debug("Finish reason: {}", finish_reason);
-
-    // Extract the content
-    std::string content = first_choice["message"][content_key].get<std::string>();
-
-    // Note: Token usage display would require access to Config here
-    // Currently the low-level API function doesn't have access to Config
-    // This is a design limitation that would need refactoring to fix properly
-
-    return content;
+    // Extract and return the response content
+    return extract_message_content(res_json);
 }
 
 /**
@@ -893,17 +970,10 @@ std::string cmdgpt::get_gpt_chat_response(const Conversation& conversation, cons
 
     // Initialize the HTTP client with custom endpoint support
     auto [server_url, api_path] = extract_endpoint_info(config);
-    httplib::Client cli{server_url};
-
-    // Set connection and read timeouts
-    cli.set_connection_timeout(CONNECTION_TIMEOUT_SECONDS, 0);
-    cli.set_read_timeout(READ_TIMEOUT_SECONDS, 0);
-
-    // Enable certificate verification for security (same as above)
-    cli.enable_server_certificate_verification(true);
+    auto cli = create_configured_client(server_url);
 
     // Log the request safely
-    gLogger->debug("Debug: Sending conversation request with {} messages", messages.size());
+    gLogger->debug("Sending conversation request with {} messages", messages.size());
 
     // Send the POST request
     auto res = cli.Post(api_path, headers, data.dump(), std::string(APPLICATION_JSON));
@@ -918,53 +988,12 @@ std::string cmdgpt::get_gpt_chat_response(const Conversation& conversation, cons
     const auto status = static_cast<HttpStatus>(res->status);
     if (status != HttpStatus::OK)
     {
-        // Construct error message with fallback handling
-        std::string error_msg = "HTTP " + std::to_string(res->status);
-        if (!res->body.empty())
-        {
-            try
-            {
-                // Try to extract structured error message from OpenAI's error response
-                json error_json = json::parse(res->body);
-                if (error_json.contains("error") && error_json["error"].contains("message"))
-                {
-                    error_msg += ": " + error_json["error"]["message"].get<std::string>();
-                }
-            }
-            catch (...)
-            {
-                // If JSON parsing fails, use generic HTTP status message
-                // This handles cases where the error response isn't valid JSON
-            }
-        }
-        throw ApiException(status, error_msg);
+        handle_http_error(status, res->body);
     }
 
-    // Parse response
-    json res_json;
-    try
-    {
-        res_json = json::parse(res->body);
-    }
-    catch (const json::parse_error& e)
-    {
-        throw ApiException(HttpStatus::EMPTY_RESPONSE,
-                           "Invalid JSON response: " + std::string(e.what()));
-    }
-
-    // Extract response content
-    if (!res_json.contains(CHOICES_KEY) || res_json[CHOICES_KEY].empty())
-    {
-        throw ApiException(HttpStatus::EMPTY_RESPONSE, "No choices in API response");
-    }
-
-    const auto& first_choice = res_json[CHOICES_KEY][0];
-    if (!first_choice.contains("message") || !first_choice["message"].contains(CONTENT_KEY))
-    {
-        throw ApiException(HttpStatus::EMPTY_RESPONSE, "No content in API response");
-    }
-
-    return first_choice["message"][CONTENT_KEY].get<std::string>();
+    // Parse response and extract content
+    json res_json = parse_json_response(res->body, "conversation");
+    return extract_message_content(res_json);
 }
 
 // ============================================================================
@@ -1812,7 +1841,7 @@ std::string cmdgpt::ResponseCache::get(const std::string& key) const
     {
         // Use shared lock for reading
         FileLock lock(path, LockType::SHARED);
-        
+
         std::ifstream file(path);
         if (!file.is_open())
         {
@@ -2006,16 +2035,6 @@ cmdgpt::ResponseCache& cmdgpt::get_response_cache()
 
 // ============================================================================
 // Token Usage Implementation
-// ============================================================================
-
-/**
- * @brief Model pricing per 1K tokens (as of 2024)
- */
-static const std::map<std::string, std::pair<double, double>> MODEL_PRICING = {
-    {"gpt-4", {0.03, 0.06}}, // input, output per 1K tokens
-    {"gpt-4-turbo-preview", {0.01, 0.03}},
-    {"gpt-3.5-turbo", {0.0005, 0.0015}},
-    {"gpt-3.5-turbo-16k", {0.003, 0.004}}};
 
 /**
  * @brief Parse token usage from API response
@@ -2030,36 +2049,16 @@ static const std::map<std::string, std::pair<double, double>> MODEL_PRICING = {
 cmdgpt::TokenUsage cmdgpt::parse_token_usage(const std::string& response_json,
                                              std::string_view model)
 {
-    TokenUsage usage;
-
     try
     {
-        auto json = nlohmann::json::parse(response_json);
-
-        if (json.contains("usage"))
-        {
-            auto& usage_json = json["usage"];
-            usage.prompt_tokens = usage_json.value("prompt_tokens", 0);
-            usage.completion_tokens = usage_json.value("completion_tokens", 0);
-            usage.total_tokens = usage_json.value("total_tokens", 0);
-
-            // Calculate cost if model pricing is known
-            std::string model_str(model);
-            if (MODEL_PRICING.count(model_str) > 0)
-            {
-                const auto& pricing = MODEL_PRICING.at(model_str);
-                usage.estimated_cost = (usage.prompt_tokens * pricing.first +
-                                        usage.completion_tokens * pricing.second) /
-                                       1000.0;
-            }
-        }
+        json parsed = json::parse(response_json);
+        return extract_token_usage(parsed, std::string(model));
     }
     catch (const std::exception& e)
     {
         gLogger->debug("Failed to parse token usage: {}", e.what());
+        return TokenUsage{};
     }
-
-    return usage;
 }
 
 /**
@@ -2265,7 +2264,7 @@ void cmdgpt::ResponseHistory::load()
 
     // Use shared lock for reading
     FileLock lock(history_file_, LockType::SHARED);
-    
+
     std::ifstream file(history_file_);
     if (!file)
     {
@@ -2723,7 +2722,7 @@ cmdgpt::RateLimiter& cmdgpt::get_rate_limiter()
                 // Fallback to in-memory rate limiting if HOME not set
                 return;
             }
-            
+
             auto state_file = std::filesystem::path(home) / ".cmdgpt" / "rate_limiter.state";
             try
             {
@@ -2735,7 +2734,7 @@ cmdgpt::RateLimiter& cmdgpt::get_rate_limiter()
                 // Fall back to in-memory rate limiting
             }
         }
-        
+
         void acquire() override
         {
             if (file_limiter_)
@@ -2749,7 +2748,7 @@ cmdgpt::RateLimiter& cmdgpt::get_rate_limiter()
                 RateLimiter::acquire();
             }
         }
-        
+
         bool try_acquire() override
         {
             if (file_limiter_)
@@ -2762,7 +2761,7 @@ cmdgpt::RateLimiter& cmdgpt::get_rate_limiter()
             }
         }
     } limiter;
-    
+
     return limiter;
 }
 
@@ -2852,10 +2851,7 @@ std::string cmdgpt::get_gpt_chat_response_with_images(std::string_view prompt,
     std::string api_path =
         config.endpoint().empty() ? std::string(API_URL) : "/v1/chat/completions";
 
-    httplib::Client cli{server_url};
-    cli.set_connection_timeout(CONNECTION_TIMEOUT_SECONDS, 0);
-    cli.set_read_timeout(READ_TIMEOUT_SECONDS, 0);
-    cli.enable_server_certificate_verification(true);
+    auto cli = create_configured_client(server_url);
 
     gLogger->debug("Sending vision request with {} images", images.size());
 
@@ -2870,53 +2866,24 @@ std::string cmdgpt::get_gpt_chat_response_with_images(std::string_view prompt,
     const auto status = static_cast<HttpStatus>(res->status);
     if (status != HttpStatus::OK)
     {
-        std::string error_msg = "HTTP " + std::to_string(res->status);
-        if (!res->body.empty())
-        {
-            try
-            {
-                json error_json = json::parse(res->body);
-                if (error_json.contains("error") && error_json["error"].contains("message"))
-                {
-                    error_msg += ": " + error_json["error"]["message"].get<std::string>();
-                }
-            }
-            catch (...)
-            {
-                error_msg += ": " + res->body;
-            }
-        }
-        throw ApiException(status, error_msg);
+        handle_http_error(status, res->body);
     }
 
     // Parse response
-    try
+    json response = parse_json_response(res->body, "vision");
+    std::string content = extract_message_content(response);
+
+    // Store in cache if enabled
+    if (config.cache_enabled())
     {
-        json response = json::parse(res->body);
-        if (!response.contains("choices") || response["choices"].empty())
-        {
-            throw ApiException(HttpStatus::OK, "Invalid API response: missing choices");
-        }
-
-        std::string content = response["choices"][0]["message"]["content"];
-
-        // Store in cache if enabled
-        if (config.cache_enabled())
-        {
-            auto& cache = get_response_cache();
-            std::string cache_key = cache.generate_key(
-                std::string(prompt) + " [" + std::to_string(images.size()) + " images]",
-                config.model(), config.system_prompt());
-            cache.put(cache_key, content);
-        }
-
-        return content;
+        auto& cache = get_response_cache();
+        std::string cache_key = cache.generate_key(std::string(prompt) + " [" +
+                                                       std::to_string(images.size()) + " images]",
+                                                   config.model(), config.system_prompt());
+        cache.put(cache_key, content);
     }
-    catch (const json::exception& e)
-    {
-        throw ApiException(HttpStatus::OK,
-                           "Failed to parse API response: " + std::string(e.what()));
-    }
+
+    return content;
 }
 
 /**
@@ -2962,10 +2929,7 @@ std::string cmdgpt::generate_image(std::string_view prompt, const Config& config
 
     std::string server_url =
         config.endpoint().empty() ? std::string(SERVER_URL) : config.endpoint();
-    httplib::Client cli{server_url};
-    cli.set_connection_timeout(CONNECTION_TIMEOUT_SECONDS, 0);
-    cli.set_read_timeout(60, 0); // Image generation can take longer
-    cli.enable_server_certificate_verification(true);
+    auto cli = create_configured_client(server_url, 60); // Image generation can take longer
 
     gLogger->info("Generating image with DALL-E...");
 
@@ -2981,50 +2945,27 @@ std::string cmdgpt::generate_image(std::string_view prompt, const Config& config
     const auto status = static_cast<HttpStatus>(res->status);
     if (status != HttpStatus::OK)
     {
-        std::string error_msg = "HTTP " + std::to_string(res->status);
-        if (!res->body.empty())
-        {
-            try
-            {
-                json error_json = json::parse(res->body);
-                if (error_json.contains("error") && error_json["error"].contains("message"))
-                {
-                    error_msg += ": " + error_json["error"]["message"].get<std::string>();
-                }
-            }
-            catch (...)
-            {
-                error_msg += ": " + res->body;
-            }
-        }
-        throw ApiException(status, error_msg);
+        handle_http_error(status, res->body);
     }
 
     // Parse response
-    try
+    json response = parse_json_response(res->body, "DALL-E");
+
+    if (!response.contains("data") || response["data"].empty())
     {
-        json response = json::parse(res->body);
-        if (!response.contains("data") || response["data"].empty())
-        {
-            throw ApiException(HttpStatus::OK, "Invalid DALL-E response: missing data");
-        }
-
-        std::string base64_image = response["data"][0]["b64_json"];
-
-        // Log revised prompt if available
-        if (response["data"][0].contains("revised_prompt"))
-        {
-            gLogger->info("DALL-E revised prompt: {}",
-                          response["data"][0]["revised_prompt"].get<std::string>());
-        }
-
-        return base64_image;
+        throw ApiException(HttpStatus::EMPTY_RESPONSE, "Invalid DALL-E response: missing data");
     }
-    catch (const json::exception& e)
+
+    std::string base64_image = response["data"][0]["b64_json"];
+
+    // Log revised prompt if available
+    if (response["data"][0].contains("revised_prompt"))
     {
-        throw ApiException(HttpStatus::OK,
-                           "Failed to parse DALL-E response: " + std::string(e.what()));
+        gLogger->info("DALL-E revised prompt: {}",
+                      response["data"][0]["revised_prompt"].get<std::string>());
     }
+
+    return base64_image;
 }
 
 // ============================================================================
@@ -3085,10 +3026,7 @@ cmdgpt::ApiResponse cmdgpt::get_gpt_chat_response_full(std::string_view prompt,
     get_rate_limiter().acquire();
 
     // Initialize HTTP client
-    httplib::Client cli{std::string(SERVER_URL)};
-    cli.set_connection_timeout(CONNECTION_TIMEOUT_SECONDS, 0);
-    cli.set_read_timeout(READ_TIMEOUT_SECONDS, 0);
-    cli.enable_server_certificate_verification(true);
+    auto cli = create_configured_client(std::string(SERVER_URL));
 
     // Send request
     auto res = cli.Post(std::string(API_URL), headers, data.dump(), std::string(APPLICATION_JSON));
@@ -3098,46 +3036,20 @@ cmdgpt::ApiResponse cmdgpt::get_gpt_chat_response_full(std::string_view prompt,
         throw NetworkException("Failed to connect to OpenAI API - check network connection");
     }
 
-    if (res->status != static_cast<int>(HttpStatus::OK))
+    const auto status = static_cast<HttpStatus>(res->status);
+    if (status != HttpStatus::OK)
     {
-        std::string error_msg = "HTTP error " + std::to_string(res->status);
-        if (!res->body.empty())
-        {
-            try
-            {
-                json error_json = json::parse(res->body);
-                if (error_json.contains("error") && error_json["error"].contains("message"))
-                {
-                    error_msg += ": " + error_json["error"]["message"].get<std::string>();
-                }
-            }
-            catch (...)
-            {
-            }
-        }
-        throw ApiException(static_cast<HttpStatus>(res->status), error_msg);
+        handle_http_error(status, res->body);
     }
 
     // Parse response
-    json res_json = json::parse(res->body);
-
-    if (!res_json.contains("choices") || res_json["choices"].empty())
-    {
-        throw ApiException(HttpStatus::OK, "Invalid API response: missing choices");
-    }
-
-    const auto& first_choice = res_json["choices"][0];
+    json res_json = parse_json_response(res->body, "chat completion");
 
     // Build ApiResponse
     ApiResponse response;
-    response.content = first_choice["message"]["content"].get<std::string>();
+    response.content = extract_message_content(res_json);
     response.from_cache = false;
-
-    // Parse token usage
-    if (res_json.contains("usage"))
-    {
-        response.token_usage = parse_token_usage(res->body, actual_model);
-    }
+    response.token_usage = extract_token_usage(res_json, actual_model);
 
     // Store in cache if enabled
     if (config.cache_enabled() && !response.content.empty())

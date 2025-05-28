@@ -1,4 +1,4 @@
-# Concurrency Fixes for cmdgpt v0.6.1
+# Concurrency Fixes for cmdgpt v0.6.2
 
 ## Overview
 

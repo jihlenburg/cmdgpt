@@ -3,7 +3,7 @@
  * @brief Command-line interface for OpenAI GPT API
  * @author Joern Ihlenburg
  * @date 2023-2024
- * @version 0.6.1
+ * @version 0.6.2
  *
  * This file contains the main API declarations for cmdgpt, a command-line
  * tool for interacting with OpenAI's GPT models. It provides features including:
@@ -79,7 +79,7 @@ namespace cmdgpt
 {
 
 /// @brief Current version of cmdgpt
-inline constexpr std::string_view VERSION = "v0.6.1";
+inline constexpr std::string_view VERSION = "v0.6.2";
 
 /// @name Default Configuration Values
 /// @{
@@ -135,14 +135,17 @@ inline constexpr size_t MAX_CACHE_ENTRIES = 1000;               ///< Maximum num
  */
 enum class HttpStatus : int
 {
-    EMPTY_RESPONSE = -1,        ///< No response received or empty response body
-    OK = 200,                   ///< Request successful
-    BAD_REQUEST = 400,          ///< Bad request format or parameters
-    UNAUTHORIZED = 401,         ///< Invalid or missing API key
-    FORBIDDEN = 403,            ///< Access forbidden
-    NOT_FOUND = 404,            ///< Endpoint not found
-    TOO_MANY_REQUESTS = 429,    ///< Rate limit exceeded
-    INTERNAL_SERVER_ERROR = 500 ///< Server error
+    EMPTY_RESPONSE = -1,         ///< No response received or empty response body
+    OK = 200,                    ///< Request successful
+    BAD_REQUEST = 400,           ///< Bad request format or parameters
+    UNAUTHORIZED = 401,          ///< Invalid or missing API key
+    FORBIDDEN = 403,             ///< Access forbidden
+    NOT_FOUND = 404,             ///< Endpoint not found
+    TOO_MANY_REQUESTS = 429,     ///< Rate limit exceeded
+    INTERNAL_SERVER_ERROR = 500, ///< Server error
+    BAD_GATEWAY = 502,           ///< Bad gateway
+    SERVICE_UNAVAILABLE = 503,   ///< Service temporarily unavailable
+    GATEWAY_TIMEOUT = 504        ///< Gateway timeout
 };
 
 /**
@@ -1229,7 +1232,7 @@ class RateLimiter
      * @param burst_size Maximum burst capacity (default: same as requests_per_second)
      */
     explicit RateLimiter(double requests_per_second, size_t burst_size = 0);
-    
+
     /**
      * @brief Virtual destructor for inheritance
      */

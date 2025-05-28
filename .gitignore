@@ -11,3 +11,9 @@ V0.5.0_STATUS.md
 *_PLAN.md
 *_SUMMARY.md
 html/
+
+# Test files that might contain API keys
+test_api.sh
+test_*.sh
+*.key
+.env

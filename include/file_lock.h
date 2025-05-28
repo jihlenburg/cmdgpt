@@ -58,8 +58,8 @@ namespace cmdgpt
  */
 enum class LockType
 {
-    SHARED,    ///< Multiple readers allowed
-    EXCLUSIVE  ///< Single writer, no readers
+    SHARED,   ///< Multiple readers allowed
+    EXCLUSIVE ///< Single writer, no readers
 };
 
 /**
@@ -78,7 +78,7 @@ enum class LockType
  */
 class FileLock
 {
-public:
+  public:
     /**
      * @brief Construct and acquire file lock
      *
@@ -87,9 +87,8 @@ public:
      * @param timeout_ms Maximum time to wait for lock (0 = wait forever)
      * @throws std::runtime_error if lock cannot be acquired
      */
-    explicit FileLock(const std::filesystem::path& path, 
-                     LockType type = LockType::EXCLUSIVE,
-                     std::chrono::milliseconds timeout_ms = std::chrono::milliseconds(5000));
+    explicit FileLock(const std::filesystem::path& path, LockType type = LockType::EXCLUSIVE,
+                      std::chrono::milliseconds timeout_ms = std::chrono::milliseconds(5000));
 
     /**
      * @brief Release lock and close file
@@ -99,7 +98,7 @@ public:
     // Non-copyable
     FileLock(const FileLock&) = delete;
     FileLock& operator=(const FileLock&) = delete;
-    
+
     // Movable
     FileLock(FileLock&&) noexcept;
     FileLock& operator=(FileLock&&) noexcept;
@@ -108,33 +107,39 @@ public:
      * @brief Check if lock is currently held
      * @return true if lock is active
      */
-    bool is_locked() const noexcept { return locked_; }
+    bool is_locked() const noexcept
+    {
+        return locked_;
+    }
 
     /**
      * @brief Get the locked file path
      * @return Path to locked file
      */
-    const std::filesystem::path& path() const noexcept { return path_; }
-    
+    const std::filesystem::path& path() const noexcept
+    {
+        return path_;
+    }
+
     /**
      * @brief Manually unlock the file
      * @note Usually not needed as destructor will unlock
      */
     void unlock();
-    
+
     /**
      * @brief Try to downgrade exclusive lock to shared
      * @return true if successful, false otherwise
      */
     bool try_lock_shared();
-    
+
     /**
      * @brief Try to upgrade shared lock to exclusive
      * @return true if successful, false otherwise
      */
     bool try_upgrade();
 
-private:
+  private:
     std::filesystem::path path_;
     LockType type_;
     bool locked_ = false;
@@ -171,7 +176,7 @@ private:
  */
 class ScopedLockFile
 {
-public:
+  public:
     /**
      * @brief Create lock file
      *
@@ -180,7 +185,7 @@ public:
      * @throws std::runtime_error if lock file already exists after timeout
      */
     explicit ScopedLockFile(const std::filesystem::path& path,
-                           std::chrono::milliseconds timeout_ms = std::chrono::milliseconds(5000));
+                            std::chrono::milliseconds timeout_ms = std::chrono::milliseconds(5000));
 
     /**
      * @brief Remove lock file
@@ -190,17 +195,17 @@ public:
     // Non-copyable
     ScopedLockFile(const ScopedLockFile&) = delete;
     ScopedLockFile& operator=(const ScopedLockFile&) = delete;
-    
+
     // Movable
     ScopedLockFile(ScopedLockFile&&) noexcept;
     ScopedLockFile& operator=(ScopedLockFile&&) noexcept;
-    
+
     /**
      * @brief Manually unlock
      */
     void unlock();
 
-private:
+  private:
     std::filesystem::path lock_file_path_;
     bool locked_ = false;
 };
@@ -213,7 +218,7 @@ private:
  */
 class AtomicFileWriter
 {
-public:
+  public:
     /**
      * @brief Prepare atomic write to file
      *
@@ -230,14 +235,17 @@ public:
      * @brief Get output stream for writing
      * @return Output file stream
      */
-    std::ofstream& stream() { return temp_stream_; }
+    std::ofstream& stream()
+    {
+        return temp_stream_;
+    }
 
     /**
      * @brief Write string data
      * @param data String to write
      */
     void write(const std::string& data);
-    
+
     /**
      * @brief Write binary data
      * @param data Binary data to write
@@ -253,9 +261,12 @@ public:
     /**
      * @brief Abort changes (don't rename)
      */
-    void abort() { aborted_ = true; }
+    void abort()
+    {
+        aborted_ = true;
+    }
 
-private:
+  private:
     std::filesystem::path target_path_;
     std::filesystem::path temp_path_;
     std::ofstream temp_stream_;
